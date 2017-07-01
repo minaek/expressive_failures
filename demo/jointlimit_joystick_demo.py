@@ -13,7 +13,7 @@ logging.getLogger('prpy.planning.base').addHandler(logging.NullHandler())
 
 robot_starting_dofs = np.array([-1, 2, 0, 2, 0, 4, 0, 1.11022302e-16,  -1.11022302e-16, 3.33066907e-16])
 
-def initialize(demo):
+def initialize():
     '''Load and configure the Archie robot. Returns robot and environment.'''
     env = openravepy.Environment()
     env.SetViewer('qtcoin')
@@ -45,22 +45,12 @@ def initialize(demo):
     #                            [0.00000000e+00, 0.00000000e+00, -1.00000000e+00, -3.07691471e-06],
     #                            [0.00000000e+00, 1.00000000e+00, 0.00000000e+00, 5.46909690e-01],
     #                            [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]))
-    
-    if demo=="reach":
-        mug.SetTransform(np.array([[1.00000000e+00, 0.00000000e+00, 0.00000000e+00, -11.00000000e-01],
-                                   [0.00000000e+00, 0.00000000e+00, -1.00000000e+00, 0.00000000e+00],
-                                   [0.00000000e+00, 1.00000000e+00, 0.00000000e+00, 2.99900000e-01],
-                                   [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]))
-
-    elif demo=="joint limit":
-        mug.SetTransform(np.array([[1.00000000e+00, 0.00000000e+00, 0.00000000e+00, -9.00000000e-01],
+   
+    mug.SetTransform(np.array([[1.00000000e+00, 0.00000000e+00, 0.00000000e+00, -9.00000000e-01],
                                    [0.00000000e+00, 0.00000000e+00, -1.00000000e+00, 0.00000000e+00],
                                    [0.00000000e+00, 1.00000000e+00, 0.00000000e+00, -2.00000000e-01],
                                    [0.00000000e+00, 0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]))
-    elif demo == "weight":
-        None
-    else:
-        print "Incorrect demo name"
+
     robot.SetActiveDOFs(np.array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]))
     robot.SetDOFValues(robot_starting_dofs)
     return env, robot
@@ -68,7 +58,7 @@ def initialize(demo):
 def sim(env,robot):
     robot.SetDOFValues(robot_starting_dofs)
     orig_ee = robot.arm.hand.GetTransform()
-    goal = row_to_column("reach.csv")
+    goal = row_to_column("jointlimit.csv")
 
 
     goal[:,2] = goal[:,2] + math.pi #adding pi to the third joint (indexed from 1)
