@@ -8,14 +8,12 @@ import commands, logging, math, numpy as np, os, time
 import openravepy
 
 from parse_csv import row_to_column
-from lfd.rapprentice import PR2
+from lfd.rapprentice import PR2, pr2_util
 from lfd.environment.simulation import DynamicSimulationRobotWorld
 from lfd.environment.simulation_object import XmlSimulationObject, \
         TableSimulationObject, BoxSimulationObject
 from lfd.demonstration import demonstration
-from expressive_failures.util.pr2_util import open_gripper, close_gripper, \
-                                              move_gripper, follow_body_traj
-from expressive_failures.util.util import get_transform, rotation_z
+from lfd.util import util
 
 # NOTE: before running any functions in this script, run the following commands:
 #     roslaunch pr2capabilities_gazebo pr2capabilities.launch
@@ -28,8 +26,9 @@ from expressive_failures.util.util import get_transform, rotation_z
 MODELS_DIR = os.path.expanduser("~/.gazebo/models")
 CUP_MESH = "plastic_cup_2/meshes/plastic_cup_1-5_0-8x0-8y1-3z.dae"
 TABLE_HEIGHT = 0.45
+LOAD_GAZEBO = False
 
-def initialize():
+def initialize(load_gazebo=True):
     openrave_sim = DynamicSimulationRobotWorld()
     robot_xml = XmlSimulationObject("robots/pr2-beta-static.zae", dynamic=False)
     openrave_sim.add_objects([robot_xml], consider_finger_collisions=True)
@@ -51,8 +50,11 @@ def initialize():
     # Initialize interface for passing controls to Gazebo. Make sure to pass
     # in the OpenRave environment we just created, so PR2 isn't referring (and
     # updating) a separate OpenRave environment.
-    pr2 = PR2.PR2(openrave_sim.env)
-    time.sleep(0.2)
+    if load_gazebo:
+        pr2 = PR2.PR2(env=openrave_sim.env)
+        time.sleep(0.2)
+    else:
+        pr2 = None
 
     return openrave_sim, pr2, v, cup
     
@@ -72,29 +74,67 @@ def move_cup(x, y, z, object_id='plastic_cup'):
         # moving cup failed
         print "ERROR: failed to move cup to new position"
 
-def move_to_initial_position(pr2):
+def place_cup(x, y, z, object_id='plastic_cup'):
+    subprocess.Popen(['rosrun', 'gazebo_ros', 'spawn_model', '-database',
+                      'plastic_cup_2', '-sdf', '-model', object_id,
+                      '-x', str(x), '-y', str(y), '-z', str(z)])
+
+def remove_cup(model_id='plastic_cup'):
+    subprocess.Popen(['rosservice', 'call', 'gazebo/delete_model', "'{model_name: " + model_id + "}'"])
+
+def update_or_robot(robot, joint_vals, ros_to_rave=False, rave_inds=None):
+    if ros_to_rave:
+        ros_values = joint_vals
+        rave_values = [ros_values[i_ros] for i_ros in PR2.GOOD_ROS_INDS]
+        robot.SetJointValues(rave_values[:20], PR2.ALL_RAVE_INDS[:20])
+        robot.SetJointValues(rave_values[20:], PR2.ALL_RAVE_INDS[20:])   
+    elif rave_inds is not None:
+        robot.SetJointValues(joint_vals, rave_inds)
+    else:
+        robot.SetJointValues(joint_vals)
+
+def move_to_initial_position(pr2, or_pr2):
     # Move PR2 to initial position
-    #pr2.torso.set_height(0.3)
-    pr2.head.set_pan_tilt(0, 1.05)
-    pr2.rarm.goto_posture('side')
-    pr2.larm.goto_posture('side')
-    open_gripper(pr2, 'r')
-    open_gripper(pr2, 'l')
-    pr2.join_all()
-    time.sleep(3)
-    pr2.update_rave()
+    if pr2 is not None:
+        #pr2.torso.set_height(0.3)
+        pr2.head.set_pan_tilt(0, 1.05)
+        pr2.rarm.goto_posture('side')
+        pr2.larm.goto_posture('side')
+        pr2_util.open_gripper(pr2, 'r')
+        pr2_util.open_gripper(pr2, 'l')
+        pr2.join_all()
+        time.sleep(3)
+        pr2.update_rave()
+    else:
+        init_joint_vals = [-9.548349400034795e-07, 0.007108477115980172, \
+                0.008535662439170366, 9.108906606769551e-07, 0.01342759549560313, \
+                0.015541732430619069, 2.3592229583258018e-06, -0.007190925151169481, \
+                -0.006547917447990771, -2.440460509234299e-06, -0.007291211060291403, \
+                -0.006701316959966341, 0.011497875265269247, 0.0, 1.3353169938667975e-06, \
+                1.1014890829727761, -0.14584224062866813, -1.010999999980605, \
+                -1.8320000000141485, -0.3320000000114023, -1.0999999999921979, \
+                -1.4370000000050762, -2.0000006405930977, -3.073999999972446, \
+                0.08000002637629851, 0.46313299645051387, 0.46313299645051387, \
+                0.46313299645051387, 0.46313299645051387, 0.0, 0.0, \
+                1.0109999999819799, 1.8320000000517975, -0.33199999997730156, \
+                1.10000000001222, -1.4369999999995882, -2.0000006542547393, \
+                3.0740000000266487, 0.08000005416076225, 0.4631331720114844, \
+                0.4631331720114844, 0.4631331720114844, 0.4631331720114844, 0.0, 0.0]
+        update_or_robot(or_pr2, init_joint_vals, ros_to_rave=True)
 
 def pick_up_cup(or_sim, pr2, cup, cup_x=0.66, cup_y=0, cup_z=TABLE_HEIGHT+0.03):
+    or_pr2 = or_sim.env.GetRobots()[0]
+
     lr = 'r'  # Execute task with just right gripper
-    cup.set_state([get_transform(cup_x, cup_y, cup_z + 0.09)])
+    cup.set_state([util.get_transform(cup_x, cup_y, cup_z + 0.09)])
     cup.get_bullet_objects()[0].UpdateRave()
 
     D = 0.035  # distance from gripper point (fingertips when closed) to center
     R = D * 0.67  # cup radius
-    PICK_UP_HEIGHT = 0.07 + 0.04
+    PICK_UP_HEIGHT = 0.11  # 0.11
     ADJ_D = D
 
-    move_to_initial_position(pr2)
+    move_to_initial_position(pr2, or_pr2)
     move_cup(cup_x+0.005, cup_y, cup_z)
 
     # Move gripper to cup and grasp it
@@ -102,43 +142,57 @@ def pick_up_cup(or_sim, pr2, cup, cup_x=0.66, cup_y=0, cup_z=TABLE_HEIGHT+0.03):
                         R + ADJ_D*math.sin(np.pi/4), \
                         cup_z+PICK_UP_HEIGHT]
     full_traj_tocup, pose_costs = \
-            move_gripper(or_sim, gripper_end, R_end=rotation_z(np.pi/4), lr=lr, \
+            pr2_util.move_gripper(or_sim, gripper_end, R_end=util.rotation_z(np.pi/4), lr=lr, \
                          beta_rot=100000.0, n_steps=100, grasp_cup=True, R=R, \
                          D=D, cup_xyz=np.r_[cup_x, cup_y, cup_z+PICK_UP_HEIGHT])
-    aug_traj_tocup = \
-            demonstration.AugmentedTrajectory.create_from_full_traj(pr2.robot, full_traj_tocup)
-    bodypart2traj = {}
-    for lr, arm_traj in aug_traj_tocup.lr2arm_traj.items():
-        part_name = {"l":"larm", "r":"rarm"}[lr]
-        bodypart2traj[part_name] = arm_traj
-    follow_body_traj(pr2, bodypart2traj, speed_factor=0.2)
-    close_gripper(pr2, lr)
-    time.sleep(2)
-    or_sim.remove_objects([cup])
-    pr2.update_rave()
+
+    if pr2 is not None:
+        aug_traj_tocup = \
+                demonstration.AugmentedTrajectory.create_from_full_traj(pr2.robot, full_traj_tocup)
+        bodypart2traj = {}
+        for lr, arm_traj in aug_traj_tocup.lr2arm_traj.items():
+            part_name = {"l":"larm", "r":"rarm"}[lr]
+            bodypart2traj[part_name] = arm_traj
+        pr2_util.follow_body_traj(pr2, bodypart2traj, speed_factor=0.2)
+        pr2_util.close_gripper(pr2, lr)
+        time.sleep(2)
+
+        or_sim.remove_objects([cup])
+        pr2.update_rave()
+    else:
+        update_or_robot(or_pr2, full_traj_tocup[0][-1,:], rave_inds=full_traj_tocup[1])
 
     # Lift up cup
     gripper_end = np.r_[0.66, 0, TABLE_HEIGHT+0.03+0.5]
-    full_traj_pickup, _ = move_gripper(or_sim, gripper_end, R_end=rotation_z(np.pi/2), \
-                                       lr=lr, n_steps=30)
-    aug_traj_pickup = \
-            demonstration.AugmentedTrajectory.create_from_full_traj(pr2.robot, full_traj_pickup)
-    bodypart2traj = {}
-    for lr, arm_traj in aug_traj_pickup.lr2arm_traj.items():
-        part_name = {"l":"larm", "r":"rarm"}[lr]
-        bodypart2traj[part_name] = arm_traj
-    follow_body_traj(pr2, bodypart2traj, speed_factor=0.5)
-    time.sleep(2)
-    or_sim.add_objects([cup], consider_finger_collisions=True)
-    pr2.update_rave()
+    full_traj_pickup, _ = pr2_util.move_gripper(or_sim, gripper_end, R_end=util.rotation_z(np.pi/2), \
+                                                lr=lr, n_steps=30)
 
-    o = commands.getstatusoutput("rosservice call gazebo/get_model_state '{model_name: plastic_cup}'")
-    cup_z_after = float(o[1].split('\n')[4].split(':')[1])
-    return cup_z_after > TABLE_HEIGHT + 0.2
+    if pr2 is not None:
+        aug_traj_pickup = \
+                demonstration.AugmentedTrajectory.create_from_full_traj(pr2.robot, full_traj_pickup)
+        bodypart2traj = {}
+        for lr, arm_traj in aug_traj_pickup.lr2arm_traj.items():
+            part_name = {"l":"larm", "r":"rarm"}[lr]
+            bodypart2traj[part_name] = arm_traj
+        pr2_util.follow_body_traj(pr2, bodypart2traj, speed_factor=0.5)
+        time.sleep(2)
+        or_sim.add_objects([cup], consider_finger_collisions=True)
+        pr2.update_rave()
+        o = commands.getstatusoutput("rosservice call gazebo/get_model_state '{model_name: plastic_cup}'")
+        cup_z_after = float(o[1].split('\n')[4].split(':')[1])
+
+        success = cup_z_after > TABLE_HEIGHT + 0.2
+    else:
+        update_or_robot(or_pr2, full_traj_tocup[0][-1,:], rave_inds=full_traj_tocup[1])
+        success = None
+
+    move_to_initial_position(pr2, or_pr2)
+    time.sleep(1)
+    return success
 
 def main():
     rospy.init_node("manip_task",disable_signals=True)
-    or_sim, pr2, v, cup = initialize()
+    or_sim, pr2, v, cup = initialize(load_gazebo=LOAD_GAZEBO)
     success = pick_up_cup(or_sim, pr2, cup)
     print "Success:", success
 

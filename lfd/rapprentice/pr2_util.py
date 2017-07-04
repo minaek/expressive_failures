@@ -1,5 +1,5 @@
 import numpy as np, random
-from expressive_failures.util.util import rotation_z
+from lfd.util import util
 from lfd.rapprentice import math_utils as mu, resampling, retiming
 from lfd.transfer import planning
 from lfd.environment import sim_util
@@ -26,7 +26,7 @@ def move_gripper(sim, t_end, R_end=None, lr='r', n_steps=10, \
             theta = -np.pi/2
         else:
             raise
-        R_end = rotation_z(theta)
+        R_end = util.rotation_z(theta)
     hmat_end = np.r_[np.c_[R_end, t_end], np.c_[0,0,0,1]]
     traj, dof_inds, pose_costs = \
             plan_full_traj(sim.robot, hmat_start, hmat_end, True, lr=lr, \
