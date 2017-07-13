@@ -26,7 +26,7 @@ robot = env.GetRobots()[0]
 manip = robot.GetManipulator("rightarm")
 
 robot.SetActiveManipulator(manip)
-ikmodel = databases.inversekinematics.InverseKinematicsModel(robot,iktype=IkParameterization.Type.Translation3D)
+ikmodel = databases.inversekinematics.InverseKinematicsModel(robot,iktype=IkParameterization.Type.Translation6D)
 if not ikmodel.load():
     ikmodel.autogenerate()
 

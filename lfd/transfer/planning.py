@@ -162,6 +162,14 @@ def plan_follow_trajs(robot, manip_name, ee_link_names, ee_trajs, old_traj,
     with openravepy.RobotStateSaver(robot):
         with util.suppress_stdout():
             prob = trajoptpy.ConstructProblem(s, robot.GetEnv()) # create object that stores optimization problem
+            # for t in range(1,n_steps): 
+            #     prob.AddCost(table_cost, [(t,j) for j in range(7)], "table%i"%t)
+
+
+
+
+
+
             if grasp_cup:
                 tool_link = robot.GetLink("r_gripper_tool_frame")
                 local_dir = np.array([0.,0.,1.])

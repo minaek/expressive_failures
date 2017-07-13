@@ -13,11 +13,10 @@ import time
 import trajoptpy.kin_utils as ku
 import argparse
 from math import *
-import util_attempt,cost,globalvars
-from util_attempt import *
+import util,cost,globalvars
+from util import *
 from cost import *
 from globalvars import *
-
 
 def attempt_traj():
     """ 
@@ -30,11 +29,8 @@ def attempt_traj():
 
     robot.SetDOFValues(starting_config, manip.GetArmIndices())
     xyz_target = list(manip.GetEndEffectorTransform()[:3][:,3])
-    links = robot.GetLinks()
-    link_idx = links.index(robot.GetLink('r_gripper_palm_link'))
-    linkstrans = robot.GetLinkTransformations()
-    xyz_wrist_target = list(linkstrans[link_idx][:3][:,3])
-    return plan_follow_trajs(robot,manip_name, xyz_target, xyz_wrist_target, "A")
+
+    return plan_follow_trajs(robot,manip_name, xyz_target, "A")
 
 def ideal_traj(xyz_target):
     """ 
@@ -67,17 +63,18 @@ def interpolate(start, goal, num_waypts):
     return init_waypts
 
 
-def plan_follow_trajs(robot, manip_name, xyz_target, xyz_wrist_target, IorA):
-    global n_steps, starting_config, Final_pose, manip, LIFTING_GOAL, ideal_config, ideal_config_vanilla
+def plan_follow_trajs(robot, manip_name, xyz_target, IorA):
+    print "ENTERED PLAN FOLLORW TRAJS"
+    global n_steps, starting_config, Final_pose, manip, LIFTING_GOAL
  
-    quat_target = [1,0,0,0] # wxyz
-    #quat_target = list(transform2quat(manip.GetEndEffectorTransform()))
+    #quat_target = [1,0,0,0] # wxyz
+    quat_target = list(transform2quat(manip.GetEndEffectorTransform()))
 
     hmat_target = openravepy.matrixFromPose( np.r_[quat_target, xyz_target] )
 
     if IorA == "A":
         print "computing init traj."
-        init_traj = interpolate(starting_config, ideal_config, n_steps)
+        init_traj = interpolate(starting_config, Final_pose, n_steps)
         print "done computing init traj."
 
     elif IorA == "I":
@@ -104,35 +101,15 @@ def plan_follow_trajs(robot, manip_name, xyz_target, xyz_wrist_target, IorA):
         "constraints" : [
         {                                                                             
             "type" : "pose", 
-            "params" : {
-            "xyz" : xyz_target, 
+            "params" : {"xyz" : xyz_target, 
             "wxyz" : quat_target, 
             "link": "r_gripper_tool_frame",
-            "timestep" : n_steps-1,
-            "rot_coeffs" : [10,10,10],
-            #"pos_coeffs" : [1,1,1]
+            "timestep" : n_steps-1
             }
 
             # "type" : "joint", # joint-space target
             # "params" : {"vals" : Final_pose.tolist() } # length of vals = # dofs of manip
-        },
-
-        # {
-        #     "type" : "pose", 
-        #     "params" : {
-        #     "xyz" : xyz_wrist_target, 
-        #     "wxyz" : quat_target, 
-        #     "link": "r_gripper_r_link",
-        #     "timestep" : n_steps-1,
-        #     "rot_coeffs" : [0,0,0],
-        #     "pos_coeffs" : [1,1,1]
-        #     }
-
-
-        # }
-
-
-        ],
+        }],
 
         "init_info" : {
             "type": "given_traj",
@@ -143,21 +120,20 @@ def plan_follow_trajs(robot, manip_name, xyz_target, xyz_wrist_target, IorA):
     }
     robot.SetDOFValues(starting_config, manip.GetArmIndices())
     y,p,r = get_euler(manip.GetEndEffectorTransform())
-    #request["constraints"][0]["params"]["rot_coeffs"] = [0,0,0]
+    request["constraints"][0]["params"]["rot_coeffs"] = [0,0,0]
     #request["constraints"][0]["params"]["rot_coeffs"] = [y,p,r]
 
     
     print "computing s"
     s = json.dumps(request)
     print "done computing s"
-    # with openravepy.RobotStateSaver(robot):
-   	# 	with util.suppress_stdout():
-		    # print "S: " + str(s)
-		    # print "computing prob"
+    #with openravepy.RobotStateSaver(robot):
+   # with util.suppress_stdout():
+    print "S: " + str(s)
+    print "computing prob"
     prob = trajoptpy.ConstructProblem(s, robot.GetEnv()) # create object that stores optimization problem
-    # print "done computing prob."
+    print "done computing prob."
     if IorA == "I":
-    	print "Adding cost."
         for t in range(n_steps): 
             prob.AddCost(cost_largest_change1, [(t,j) for j in range(7)], "table%i"%t)
             prob.AddCost(cost_largest_change2, [(t,j) for j in range(7)], "table%i"%t)
@@ -169,12 +145,14 @@ def plan_follow_trajs(robot, manip_name, xyz_target, xyz_wrist_target, IorA):
 
             #prob.AddCost(cost_quat, [(t,j) for j in range(7)], "table%i"%t)
     elif IorA == "A":
+        print"Adding cost."
         for t in range(n_steps):
             #Minimize distance between delta EE and delta EL vecs
             prob.AddCost(cost_distance_bet_deltas, [(t,j) for j in range(7)], "table%i"%t)
 
             #minimize distance between current config and ideal config 
             #prob.AddCost(cost_distance, [(t,j) for j in range(7)], "table%i"%t)
+        print "Done adding cost."
     else:
         raise
 

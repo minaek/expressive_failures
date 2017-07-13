@@ -47,8 +47,6 @@ xyz_target = [8.54594490e-01, -1.88000000e-01,  1.19776467e+00]
 
 #calculate coordinate with largest distance
 manip = robot.GetManipulator("rightarm")
-robot.SetActiveManipulator(manip)
-
 xyz_init = manip.GetTransform()[:,3][:3] #3x1
 difference = (xyz_init-xyz_target)
 coord = np.argmax(np.abs(difference)) #0=x,1=y or 2=z difference[coord] would give u largest diff
@@ -60,6 +58,7 @@ quat_target = [1,0,0,0] # wxyz
 hmat_target = openravepy.matrixFromPose( np.r_[quat_target, xyz_target] )
 
 # BEGIN ik
+robot.SetActiveManipulator(manip)
 ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(
     robot, iktype=openravepy.IkParameterization.Type.Transform6D)
 if not ikmodel.load():

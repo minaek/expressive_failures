@@ -16,42 +16,34 @@ def features_distance_bet_deltas(waypt):
     ---
     input trajectory, output scalar feature
     """
-    global robot, manip, ideal_config, ideal_config_vanilla, Final_pose
+    global robot, manip, ideal_config
     armids = list(manip.GetArmIndices()) #get arm indices
     links = robot.GetLinks()
     link_idx = links.index(robot.GetLink('r_elbow_flex_link'))
-    link_idxs = [links.index(robot.GetLink('r_elbow_flex_link')),links.index(robot.GetLink('torso_lift_link'))]
-    curr=[]
-    des =[]
-    dotprods = []
+
 
     robot.SetDOFValues(waypt,armids) # set dof values to current config
     EEcurr = manip.GetEndEffectorTransform()[:3][:,3] #get EE q
     linkstrans = robot.GetLinkTransformations()
-    Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
-    # for i in range(len(link_idxs)):
-    #     curr.append(linkstrans[link_idxs[i]][:3][:,3])
+   	Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
 
 
     robot.SetDOFValues(ideal_config,armids) #set dof valuue to ideal config
     EEdesired = manip.GetEndEffectorTransform()[:3][:,3] #get EE qd    
     linkstrans_d = robot.GetLinkTransformations()
     Ldesired = linkstrans_d[link_idx][:3][:,3]
-    # for i in range(len(link_idxs)):
-    #     des.append(linkstrans_d[link_idxs[i]][:3][:,3])
 
-    deltaEE = np.abs(EEdesired-EEcurr)
-    deltaL = np.abs(Ldesired-Lcurr)
-    # for i in range(len(link_idxs)):
-    #     deltaLs = des[i]-curr[i]
-    #     dotprods.append(np.dot(deltaEE,deltaLs))
-
+    deltaEE = EEdesired-EEcurr
+    deltaL = Ldesired-Lcurr
 
     dotprod = np.dot(deltaEE,deltaL)
-    #d = np.linalg.norm(deltaEE-deltaL)
-
-    return dotprod
-    # return sum(dotprods)
+    d = np.linalg.norm(deltaEE-deltaL)
+ #    timestr = time.strftime("%m%d-%H%M")
+	# f = open('/mnt/hgfs/Virtual\ Machines/data/'+timestr+'.txt', 'w')
+	# print >> f, 'Dot product, r_forearm_link:', str(dotprod)  # or f.write('...\n')
+	# f.close()
+	#return dotprod
+	return dotprod
 
     # dot_prods =[]
     # for x in range(len(arm_transformations)):
@@ -70,7 +62,7 @@ def cost_distance_bet_deltas(waypt):
     """
 
     feature = features_distance_bet_deltas(waypt)
-    return feature
+    return -feature
 
 
 ####### (2) Minimize distance between desired and actual joint config #######
@@ -81,12 +73,11 @@ def features_distance(waypt):
     ---
     input trajectory, output scalar feature
     """
-    global ideal_config, ideal_config_vanilla, Final_pose
+    global ideal_config
     robot.SetDOFValues(waypt,manip.GetArmIndices())
     #ideal_waypt = get_ideal_config()
     ideal_waypt = ideal_config
-    dist = np.linalg.norm(ideal_waypt-waypt)
-    #dist = np.sum(np.abs(waypt-ideal_waypt))
+    dist = np.linalg.norm(waypt-ideal_waypt)
     return dist
 
 def cost_distance(waypt):
@@ -103,52 +94,44 @@ def cost_distance(waypt):
 
 ####### (3) Maximize similarity between delta config and goal vectors #######
 def features_ee_to_joint_dist(waypt):
-    global robot, manip, ideal_config,ideal_config_vanilla,Final_pose
-    curr=[]
-    des=[]
+	global robot, manip, ideal_config
+	curr=[]
+	des=[]
     armids = list(manip.GetArmIndices()) #get arm indices
     links = robot.GetLinks()
-    names = ['r_elbow_flex_link','r_forearm_link','r_upper_arm_link','r_shoulder_lift_link']
-    sum_dot_prod=0
+   	names = ['r_elbow_flex_link','r_forearm_link','r_upper_arm_link','r_shoulder_left_link']
+   	sum_dot_prod=0
 
 
     robot.SetDOFValues(waypt,armids) # set dof values to current config
     EEcurr = manip.GetEndEffectorTransform()[:3][:,3] #get EE q
     for name in names:
-        link_idx = links.index(robot.GetLink(name))
-        linkstrans = robot.GetLinkTransformations()
-        Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
-        curr.append(EEcurr-Lcurr)
+	    link_idx = links.index(robot.GetLink(name))
+	    linkstrans = robot.GetLinkTransformations()
+	   	Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
+	   	curr.append(EEcurr-Lcurr)
 
-    robot.SetDOFValues(ideal_config,armids) #set dof valuue to ideal config
+	robot.SetDOFValues(ideal_config,armids) #set dof valuue to ideal config
     EEdes = manip.GetEndEffectorTransform()[:3][:,3] #get EE qd  
     for name in names:
-        link_idx = links.index(robot.GetLink(name))
-        linkstrans = robot.GetLinkTransformations()
-        Ldes = linkstrans[link_idx][:3][:,3] #get xyz of specific link
-        des.append(EEdes-Ldes)
+	    link_idx = links.index(robot.GetLink(name))
+	    linkstrans = robot.GetLinkTransformations()
+	    Ldes = linkstrans[link_idx][:3][:,3] #get xyz of specific link
+	    des.append(EEdes-Ldes)
 
-    for i in range(len(curr)):
-        sum_dot_prod = sum_dot_prod + np.dot(curr[i],des[i])
-    return sum_dot_prod
+	for i in range(len(curr)):
+   		sum_dot_prod = sum_dot_prod + np.dot(curr[i],des[i])
+   	return sum_dot_prod
 
 
 def cost_ee_to_joint_dist(waypt):
-    feature = features_ee_to_joint_dist(waypt)
-    return -feature
-
+	feature = features_ee_to_joint_dist(waypt)
+	return -feature
 
 ####### (4) Maximize similarity in config space #######
-def features_config(waypt):
-    global ideal_config,robot,ideal_config_vanilla,Final_pose
-    robot.SetDOFValues(waypt,manip.GetArmIndices())
-    ideal_waypt = ideal_config
-    diff = waypt-ideal_waypt
-    return np.dot(diff,diff)
 
-def cost_config(waypt):
-    feature = features_config(waypt)
-    return feature
+
+
 
 
 
