@@ -1,66 +1,49 @@
-import openravepy
+from demo import *
+from trajprac2 import *
+import pr2_util
+import roslib
+roslib.load_manifest("control_msgs")
+import rospy
+import trajoptpy
+from catkin.find_in_workspaces import find_in_workspaces
+import commands, logging, math, numpy as np, os, time
 from openravepy import *
-import numpy as np, math
-
-"""Initializes all the global variables"""
-
-
-
-#LIFTING_GOAL = [8.54594490e-01, -1.88000000e-01,  1.19776467e+00]
-
-Final_pose = np.array([-0.20907978, -0.35360022, -0.03906491, -1.24079703,  3.36408011,
-     -1.58597214, -3.10058622])
+from lfd.rapprentice import PR2
+from lfd.environment.simulation import DynamicSimulationRobotWorld
+from lfd.environment.simulation_object import XmlSimulationObject, \
+        TableSimulationObject, BoxSimulationObject
+from lfd.demonstration import demonstration
+from lfd.util import util
 
 
-#ideal config for bent elbow starting config 
-#ideal_config = [-0.08887252, -0.33820952, -0.05287741, -1.1905393 ,  2.85026761,
-#       -1.07215964, -2.58677372]
 
-ideal_config = [-1.        , -0.5       , -1.3       , -1.7       ,  0.1       ,
-        0.09999996, -1.5       ]
+def init():
+	global or_sim, pr2, v, cup, ideal_config, goal_config, starting_config
+	print "initializing rospy node.."
+	rospy.init_node("manip_task",disable_signals=True)
 
-ideal_config_vanilla = [-0.59435444, -0.35360022, -0.70886542, -1.04879236,  0.03297965,
-       -0.10000004, -1.5       ]
+	print "initializing scene.."
+	or_sim, pr2, v, cup = initialize(load_gazebo=LOAD_GAZEBO)
 
-#Set up environment 
-env = openravepy.Environment()
-env.SetViewer('qtcoin')
-env.StopSimulation()
-env.Load("robots/pr2-beta-static.zae")
-env.Load("../data/table.xml")
-viewer = env.GetViewer()
-viewer.SetCamera(
-  np.array([[ -9.94542311e-03,   5.43414497e-01,  -8.39405607e-01,
-          2.32253075e+00],
-       [  9.99869989e-01,   1.60593593e-02,  -1.45012309e-03,
-          3.47638549e-03],
-       [  1.26922983e-02,  -8.39310897e-01,  -5.43503564e-01,
-          1.97211254e+00],
-       [  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
-          1.00000000e+00]]))
+	print "solving for goal configuration.."
+	ideal_config = [-1.0, -1, -1, -1.7, 1.7, 0, 0]
+	robot = or_sim.env.GetRobots()[0]
+	# generate the ik solver
+	manip = robot.SetActiveManipulator('rightarm')
+	robot.SetActiveManipulator(manip)
+	ikmodel = openravepy.databases.inversekinematics.InverseKinematicsModel(robot, iktype=IkParameterization.Type.Transform6D)
+	if not ikmodel.load():
+	    ikmodel.autogenerate()
+	with robot:
+	    robot.SetDOFValues(ideal_config, manip.GetArmIndices())
+	    Tgoal = manip.GetEndEffectorTransform()
+	goal_config = manip.FindIKSolution(Tgoal, IkFilterOptions.CheckEnvCollisions) # get collision-free solution
+	#robot.SetDOFValues(sol,manip.GetArmIndices()) # set the current solution
+	goal_config = goal_config.tolist()
 
-robot = env.GetRobots()[0] #define robot 
-manip = robot.GetManipulator("rightarm")
+	print "grasping cup.."
+	starting_config = grasp_cup(or_sim, pr2, cup) #this is the trajectory that graspss the cup
+	# starting_config = np.array([-0.34912021,  0.21717035, -1.9241912 , -1.20652939,  1.1320245 ,
+ #       -0.42645212,  0.32148601])
+	# update_or_robot(robot, starting_config, rave_inds=manip.GetArmIndices())
 
-robot.SetActiveManipulator(manip)
-manip_name = "rightarm"
-ee_link_name = "r_gripper_tool_frame"
-ee_link = robot.GetLink(ee_link_name)
-
-n_steps = 10
-
-##Initialize robot start config##
-joint_start = [-1. ,  0. , -1.5, -1.7,  0. ,  0. , -1.5] #this is for the bent arm 
-robot.SetDOFValues(joint_start, manip.GetArmIndices())
-
-#joint_start = np.zeros(7) #straight arm
-#robot.SetDOFValues(joint_start, manip.GetArmIndices())
-
-# lower,upper = robot.GetDOFLimits(manip.GetArmIndices()) # get the limits of just the arm indices #random
-# robot.SetDOFValues(lower+numpy.random.rand(len(lower))*(upper-lower),manip.GetArmIndices())
-
-starting_config = manip.GetArmDOFValues()
-starting_transform = manip.GetEndEffectorTransform()
-ee_link_z = manip.GetEndEffectorTransform()[:3][:,3]
-ee_link_z[2] = ee_link_z[2]+0.5
-LIFTING_GOAL = list(ee_link_z)

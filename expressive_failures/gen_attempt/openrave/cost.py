@@ -1,8 +1,9 @@
+import globalvars
+from globalvars import *
 import numpy as np, math
 from math import *
 import time
 import scipy.spatial.distance
-import globalvars
 
 """All cost functions"""
 
@@ -16,9 +17,7 @@ def features_distance_bet_deltas(waypt):
     ---
     input trajectory, output scalar feature
     """
-    #global or_sim, manip, goal_config, starting_config
-    robot = globalvars.or_sim.env.GetRobots()[0]
-    manip = robot.GetActiveManipulator()
+    global robot, manip, goal_config
     armids = list(manip.GetArmIndices()) #get arm indices
     links = robot.GetLinks()
     link_idx = links.index(robot.GetLink('r_elbow_flex_link'))
@@ -34,13 +33,13 @@ def features_distance_bet_deltas(waypt):
     Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
 
     #ideal
-    robot.SetDOFValues(globalvars.goal_config,armids) #set dof valuue to ideal config
+    robot.SetDOFValues(goal_config,armids) #set dof valuue to ideal config
     EEdesired = manip.GetEndEffectorTransform()[:3][:,3] #get EE qd    
     linkstrans_d = robot.GetLinkTransformations()
     Ldesired = linkstrans_d[link_idx][:3][:,3]
     
     #start
-    robot.SetDOFValues(globalvars.starting_config,armids) #set dof valuue to starting config
+    robot.SetDOFValues(starting_config,armids) #set dof valuue to starting config
     linkstrans_s = robot.GetLinkTransformations()
     Lstart = linkstrans_s[link_idx][:3][:,3]
     EEstart = manip.GetEndEffectorTransform()[:3][:,3]

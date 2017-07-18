@@ -1,22 +1,23 @@
 from __future__ import division
-# from expressive_failures.util.util import rotation_z
+from expressive_failures.util.util import rotation_z
 import numpy as np, math
 import json
-# import openravepy
+import openravepy
 from openravepy import *
 import trajoptpy
-# from lfd.environment import sim_util
-# from lfd.util import util
-# from lfd.rapprentice import math_utils as mu, resampling, retiming
-# from lfd.transfer import settings
+from lfd.environment import sim_util
+from lfd.util import util
+from lfd.rapprentice import math_utils as mu, resampling, retiming
+from lfd.transfer import settings
 import time
-# import trajoptpy.kin_utils as ku
-# import argparse
+import trajoptpy.kin_utils as ku
+import argparse
 from math import *
-import cost
+import util_attempt,cost,globalvars
+from util_attempt import *
 from cost import *
+from globalvars import *
 from pyquaternion import Quaternion
-import globalvars
 
 
 def attempt_traj():
@@ -25,13 +26,11 @@ def attempt_traj():
     ---
     input: ee constraint coordinate position in global frame, ideal traj output: trajectory
     """    
-    robot = globalvars.or_sim.env.GetRobots()[0]
-    manip = robot.GetActiveManipulator()
+    global robot,manip,starting_config
 
-    robot.SetDOFValues(globalvars.starting_config, manip.GetArmIndices())
+    robot.SetDOFValues(starting_config, manip.GetArmIndices())
     xyz_target = list(manip.GetEndEffectorTransform()[:3][:,3])
-    manip_name = "rightarm"
-    return plan_follow_trajs(robot,manip_name,manip, xyz_target, globalvars.starting_config)
+    return plan_follow_trajs(robot,manip_name, xyz_target)
 
 def interpolate(start, goal, num_waypts):
     """
@@ -43,11 +42,9 @@ def interpolate(start, goal, num_waypts):
     return init_waypts
 
 
-def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config):
-    #global n_steps, Final_pose, manip, ideal_config, ideal_config_vanilla
-    n_steps = 10
-    ideal_config = [-1.0, -1, -1, -1.7, 1.7, 0, 0]
-
+def plan_follow_trajs(robot, manip_name, xyz_target):
+    global n_steps, starting_config, Final_pose, manip, ideal_config, ideal_config_vanilla
+ 
     #quat_target = [1,0,0,0] # wxyz
     robot.SetDOFValues(starting_config, manip.GetArmIndices())
     # t = manip.GetEndEffectorTransform()
@@ -138,11 +135,9 @@ def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config):
 
 
 def visualize(traj):
+    global env,robot,manip,starting_config
+
     for _ in range(5):
-        robot = globalvars.or_sim.env.GetRobots()[0]
-        manip = robot.GetActiveManipulator()
-
-
         robot.SetDOFValues(traj[0],manip.GetArmIndices())
         time.sleep(.5)
 
@@ -153,7 +148,7 @@ def executePathSim(waypts):
     """
     Executes in the planned trajectory in simulation
     """
-    global env,robot,manip
+    global env,robot,manip,starting_config
     
     #waypts = np.insert(waypts,0,starting_config,axis=0)
     #trajs = [waypts, np.flip(waypts,0)]
@@ -162,3 +157,15 @@ def executePathSim(waypts):
         print (w)
         robot.SetDOFValues(w,manip.GetArmIndices())
         time.sleep(.2)
+
+# def get_ideal_config():
+#     """
+#     Getter for ideal configuration
+#     ---
+#     output configuration
+#     """
+#     global LIFTING_GOAL
+#     print "Getting ideal trajectory."
+#     traj = ideal_traj(LIFTING_GOAL)
+#     print "Done getting ideal trajectory."
+#     return traj[-1]

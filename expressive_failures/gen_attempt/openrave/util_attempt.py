@@ -71,3 +71,26 @@ def get_euler(trans_matrix):
 
 	roll = np.arctan(rot_matrix[2][1]/rot_matrix[2][2])
 	return yaw, pitch, roll
+
+
+def ideal_traj(xyz_target):
+    """ 
+    Computes ideal trajectory to goal target position 
+    ---
+    input: goal coordinate position in global frame, output: trajectory
+
+    """
+    global ee_link_name,manip_name,nsteps, ee_link_z
+
+    traj =  plan_follow_trajs(robot,manip_name,xyz_target, "I")
+
+    robot.SetDOFValues(traj[-1], manip.GetArmIndices())
+    ee_transform = manip.GetEndEffectorTransform()
+
+    print " "
+    print "current pos: " + str(ee_transform[:3][:,3])
+    print "goal pos: " + str(ee_link_z) 
+    print "starting pos: " + str(starting_transform[:3][:,3])
+
+    return traj
+
