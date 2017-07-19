@@ -11,22 +11,8 @@ traj = attempt_traj()
 
 print "visualizing attempt trajectory.."
 lr = 'r'  # Execute task with just right gripper
-D = 0.035  # distance from gripper point (fingertips when closed) to center
-R = D * 0.67  # cup radius
-PICK_UP_HEIGHT = 0.11  # 0.11
-ADJ_D = D
-cup_x=0.66 
-cup_y=0
-cup_z = TABLE_HEIGHT+0.03
-TABLE_HEIGHT = 0.45
 robot = globalvars.or_sim.env.GetRobots()[0]
 manip = robot.GetActiveManipulator()
-gripper_end = np.r_[R + ADJ_D*math.cos(np.pi/4), \
-                    R + ADJ_D*math.sin(np.pi/4), \
-                    cup_z+PICK_UP_HEIGHT]
-#pr2_util.move_gripper(globalvars.or_sim, gripper_end, R_end=util.rotation_z(np.pi/4), lr=lr, \
-#                         beta_rot=100000.0, n_steps=100, grasp_cup=True, R=R, \
-#                         D=D, cup_xyz=np.r_[cup_x, cup_y, cup_z+PICK_UP_HEIGHT])
 fulltraj = traj, manip.GetArmIndices().tolist()
 if globalvars.pr2 is not None:
 
@@ -45,6 +31,7 @@ if globalvars.pr2 is not None:
 else:
     print "in else statement"
     update_or_robot(robot, fulltraj[0][-1,:], rave_inds=fulltraj[1])
+    globalvars.or_sim.viewer.Step()  # Updates OpenRave viewer, to show new robot configuration
 
 # move_to_initial_position(globalvars.pr2, robot)
 time.sleep(1)
