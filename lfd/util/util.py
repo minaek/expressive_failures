@@ -6,6 +6,13 @@ import time
 import argparse
 from lfd.util import colorize
 
+def get_time_stamp():
+    import datetime
+    import dateutil.tz
+    now = datetime.datetime.now(dateutil.tz.tzlocal())
+    timestamp = now.strftime('%Y%m%d_%H%M%S_%f')
+    return timestamp
+
 def get_transform(x, y, z):
     return np.array([[1, 0, 0, x], [0, 1, 0, y], [0, 0, 1, z], [0, 0, 0, 1]])
 

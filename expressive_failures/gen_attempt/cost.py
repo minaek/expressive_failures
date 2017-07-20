@@ -55,7 +55,7 @@ def features_distance_bet_deltas(waypt):
 
     return dotprod
 
-def cost_distance_bet_deltas(waypt):
+def cost_distance_bet_deltas(waypt, coeff=1):
     """
     Computes the total distance between waypt and ideal waypt
     ---
@@ -63,7 +63,7 @@ def cost_distance_bet_deltas(waypt):
     """
 
     feature = features_distance_bet_deltas(waypt)
-    return feature #(minimizing dot product produces raising motion..)
+    return coeff*feature #(minimizing dot product produces raising motion..)
 
 
 ####### (2) Minimize distance between desired and actual joint config #######

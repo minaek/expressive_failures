@@ -24,7 +24,7 @@ from lfd.util import util
 
 MODELS_DIR = os.path.expanduser("~/.gazebo/models")
 CUP_MESH = "plastic_cup_2/meshes/plastic_cup_1-5_0-8x0-8y1-3z.dae"
-TABLE_HEIGHT = 0.45
+TABLE_HEIGHT = 0.48
 LOAD_GAZEBO = False
 
 def initialize(load_gazebo=True):
@@ -36,11 +36,6 @@ def initialize(load_gazebo=True):
                                 [0.4, 0.75, (TABLE_HEIGHT + 0.03) / 2.0], \
                                 dynamic=False)
     openrave_sim.add_objects([table], consider_finger_collisions=True)
-    #table_xml = TableSimulationObject("table", \
-    #                                  [0.66, 0, (TABLE_HEIGHT + 0.03) / 2.0],
-    #                                  [0.4, 0.75, (TABLE_HEIGHT + 0.03) / 2.0],
-    #                                  dynamic=False)
-    #openrave_sim.add_objects([table_xml], consider_finger_collisions=True)
     cup = XmlSimulationObject(os.path.join(MODELS_DIR, CUP_MESH), dynamic=False)
     openrave_sim.add_objects([cup], consider_finger_collisions=True)
 
@@ -92,6 +87,19 @@ def update_or_robot(robot, joint_vals, ros_to_rave=False, rave_inds=None):
     else:
         robot.SetJointValues(joint_vals)
 
+def wait_until_done_moving(pr2, inc=1, eps=1e-3):
+    # inc - time to sleep in between checking joint positions, in seconds
+    waited = 0  # In seconds
+    last_pos = np.array(pr2.get_last_joint_message().position)
+    while True:
+        time.sleep(inc)
+        waited += inc
+        cur_pos = np.array(pr2.get_last_joint_message().position)
+        if np.linalg.norm(cur_pos - last_pos) < eps:
+            break
+        last_pos = cur_pos
+    print("Paused for", waited, "seconds")
+
 def move_to_initial_position(pr2, or_pr2):
     # Move PR2 to initial position
     if pr2 is not None:
@@ -102,7 +110,7 @@ def move_to_initial_position(pr2, or_pr2):
         pr2_util.open_gripper(pr2, 'r')
         pr2_util.open_gripper(pr2, 'l')
         pr2.join_all()
-        time.sleep(3)
+        wait_until_done_moving(pr2)
         pr2.update_rave()
     else:
         init_joint_vals = [-9.548349400034795e-07, 0.007108477115980172, \
@@ -121,8 +129,17 @@ def move_to_initial_position(pr2, or_pr2):
                 0.4631331720114844, 0.4631331720114844, 0.4631331720114844, 0.0, 0.0]
         update_or_robot(or_pr2, init_joint_vals, ros_to_rave=True)
 
+def pr2_follow_traj(pr2, full_traj, speed_factor=1.0):
+    aug_traj = \
+            demonstration.AugmentedTrajectory.create_from_full_traj(pr2.robot, full_traj)
+    bodypart2traj = {}
+    for lr, arm_traj in aug_traj.lr2arm_traj.items():
+        part_name = {"l":"larm", "r":"rarm"}[lr]
+        bodypart2traj[part_name] = arm_traj
+    pr2_util.follow_body_traj(pr2, bodypart2traj, speed_factor=speed_factor)
 
-def grasp_cup(or_sim, pr2, cup, cup_x=0.66, cup_y=0, cup_z=TABLE_HEIGHT+0.03):
+
+def grasp_cup(or_sim, pr2, cup, cup_x=0.66, cup_y=0, cup_z=TABLE_HEIGHT, mult_speeds=None):
     or_pr2 = or_sim.env.GetRobots()[0]
 
     lr = 'r'  # Execute task with just right gripper
@@ -135,7 +152,7 @@ def grasp_cup(or_sim, pr2, cup, cup_x=0.66, cup_y=0, cup_z=TABLE_HEIGHT+0.03):
     ADJ_D = D
 
     move_to_initial_position(pr2, or_pr2)
-    move_cup(cup_x+0.005, cup_y, cup_z)
+    move_cup(cup_x, cup_y, cup_z)
 
     # Move gripper to cup and grasp it
     gripper_end = np.r_[R + ADJ_D*math.cos(np.pi/4), \
@@ -147,14 +164,16 @@ def grasp_cup(or_sim, pr2, cup, cup_x=0.66, cup_y=0, cup_z=TABLE_HEIGHT+0.03):
                          D=D, cup_xyz=np.r_[cup_x, cup_y, cup_z+PICK_UP_HEIGHT])
 
     if pr2 is not None:
-        aug_traj_tocup = \
-                demonstration.AugmentedTrajectory.create_from_full_traj(pr2.robot, full_traj_tocup)
-        bodypart2traj = {}
-        for lr, arm_traj in aug_traj_tocup.lr2arm_traj.items():
-            part_name = {"l":"larm", "r":"rarm"}[lr]
-            bodypart2traj[part_name] = arm_traj
-        pr2_util.follow_body_traj(pr2, bodypart2traj, speed_factor=0.2)
-        pr2_util.close_gripper(pr2, lr)
+        if mult_speeds is None:
+            pr2_follow_traj(pr2, full_traj_tocup, speed_factor=0.2)
+            pr2_util.close_gripper(pr2, lr)
+        else:
+            near_cup_t = 50
+            traj_approach = (full_traj_tocup[0][:near_cup_t], full_traj_tocup[1])
+            traj_grasp = (full_traj_tocup[0][near_cup_t:], full_traj_tocup[1])
+            pr2_follow_traj(pr2, traj_approach, speed_factor=mult_speeds[0])
+            pr2_follow_traj(pr2, traj_grasp, speed_factor=mult_speeds[1])
+            pr2_util.close_gripper(pr2, lr)
         time.sleep(2)
 
         or_sim.remove_objects([cup])

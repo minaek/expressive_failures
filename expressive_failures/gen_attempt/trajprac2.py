@@ -17,6 +17,7 @@ import cost
 from cost import *
 from pyquaternion import Quaternion
 import globalvars
+from lfd.environment import sim_util
 
 
 def attempt_traj():
@@ -45,7 +46,7 @@ def interpolate(start, goal, num_waypts):
 
 def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config):
     #global n_steps, Final_pose, manip, ideal_config, ideal_config_vanilla
-    n_steps = 10
+    n_steps = 100
     ideal_config = [-1.0, -1, -1, -1.7, 1.7, 0, 0]
 
     #quat_target = [1,0,0,0] # wxyz
@@ -79,20 +80,20 @@ def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config):
         },            
         ],
         "constraints" : [
-        {                                                                             
-            "type" : "pose", 
-            "params" : {
-            "xyz" : xyz_target1, 
-            "wxyz" : quat_target1, 
-            "link": "r_gripper_palm_link",
-            "timestep" : n_steps-1,
-            "rot_coeffs" : [2,2,2],
-            "pos_coeffs" : [5,5,5]
-            }
+        #{                                                                             
+        #    "type" : "pose", 
+        #    "params" : {
+        #    "xyz" : xyz_target1, 
+        #    "wxyz" : quat_target1, 
+        #    "link": "r_gripper_palm_link",
+        #    "timestep" : n_steps-1,
+        #    "rot_coeffs" : [2,2,2],
+        #    "pos_coeffs" : [5,5,5]
+        #    }
 
-            # "type" : "joint", # joint-space target
-            # "params" : {"vals" : Final_pose.tolist() } # length of vals = # dofs of manip
-        },
+        #    # "type" : "joint", # joint-space target
+        #    # "params" : {"vals" : Final_pose.tolist() } # length of vals = # dofs of manip
+        #},
 
         # {
         #     "type" : "pose", 
@@ -117,19 +118,34 @@ def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config):
             #"enpoint": init_joint_target.tolist()
         }   
     }
+
+    for t in range(n_steps):
+        pose_constraint = {"type": "pose",
+                        "params" : {
+                        "xyz" : xyz_target1, 
+                        "wxyz" : quat_target1, 
+                        "link": "r_gripper_palm_link",
+                        "timestep" : t,
+                        "rot_coeffs" : [2,2,2],
+                        "pos_coeffs" : [5,5,5]
+                        }}
+        request["constraints"].append(pose_constraint)
     #robot.SetDOFValues(starting_config, manip.GetArmIndices())
     s = json.dumps(request)
     # with openravepy.RobotStateSaver(robot):
     #   with util.suppress_stdout():
     prob = trajoptpy.ConstructProblem(s, robot.GetEnv()) # create object that stores optimization problem
+    cost_fn = lambda x: cost_distance_bet_deltas(x, coeff=1)
     for t in range(n_steps):
-        prob.AddCost(cost_distance_bet_deltas, [(t,j) for j in range(7)], "table%i"%t)
+        prob.AddCost(cost_fn, [(t,j) for j in range(7)], "table%i"%t)
 
     print "optimizing prob to get result."
     result = trajoptpy.OptimizeProblem(prob) # do optimization
     print "done optimizing prob to get result."
 
     traj = result.GetTraj()
+    dof_inds = sim_util.dof_inds_from_name(robot, manip_name)
+    sim_util.unwrap_in_place(traj, dof_inds)
     
     print " "
     print "Resulting Traj: "
