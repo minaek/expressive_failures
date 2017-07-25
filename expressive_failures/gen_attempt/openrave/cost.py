@@ -1,3 +1,4 @@
+from __future__ import division
 import globalvars
 from globalvars import *
 import numpy as np, math
@@ -70,10 +71,14 @@ def features_projections(waypt, starting_config, goal_config, d):
     norm_deltaEE = np.linalg.norm(deltaEE)
     norm_deltaL = np.linalg.norm(deltaL)
 
-    init_projection = np.dot(deltaEE,deltaL)/norm_deltaEE
-    cos_theta = np.dot(deltaEE,deltaL)/(norm_deltaEE * norm_deltaL)
+    if norm_deltaL < 1e-10:
+        proj = 0
+    else:
+        init_projection = np.dot(deltaEE,deltaL)/norm_deltaEE
+        cos_theta = np.dot(deltaEE,deltaL)/(norm_deltaEE * norm_deltaL)
+        proj = (init_projection*(cos_theta**(d-1)))
 
-    return 1-(init_projection*(cos_theta**(d-1)))
+    return 0.1 - proj
 
 def cost_projections(waypt, starting_config, goal_config, d=7, coeff=1):
     """
@@ -101,13 +106,14 @@ def features_distance_bet_deltas(waypt,starting_config,goal_config):
     #print(cos_theta)
     #distance functions
     dotprod = np.dot(deltaEE,deltaL)
+    proj = dotprod / norm_deltaEE
     #d = np.linalg.norm(deltaEE-deltaL)
     #cos_dist = scipy.spatial.distance.cosine(deltaEE,deltaL)
     # print "DOT PRODUCT: " + str(dotprod)
 
     # print "DOT PRODUCT: " + str(1-dotprod)
 
-    return -dotprod
+    return 0.1 - proj
 
 def cost_distance_bet_deltas(waypt,starting_config,goal_config,coeff=1,):
     """

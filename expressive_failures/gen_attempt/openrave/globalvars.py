@@ -18,9 +18,9 @@ env.StopSimulation()
 ###FOR LIFTING####
 robot = env.ReadRobotXMLFile('robots/pr2-beta-static.zae')
 env.AddRobot(robot)
-target = env.ReadKinBodyXMLFile('/home/viki/openrave/src/data/mug1.kinbody.xml')
+target = env.ReadKinBodyXMLFile('/home/shhuang/src/openrave/src/data/mug1.kinbody.xml')
 #env.AddKinBody(target)
-table = env.ReadKinBodyXMLFile('/home/viki/openrave/src/data/table.kinbody.xml')
+table = env.ReadKinBodyXMLFile('/home/shhuang/src/openrave/src/data/table.kinbody.xml')
 #env.AddKinBody(table)
 
 viewer = env.GetViewer()
@@ -132,6 +132,9 @@ Tgoal = [[ 0.25367689, -0.57112269,  0.78068362,  0.60407119],
        [-0.96691492, -0.17216629,  0.18824001,  0.98687443],
        [ 0.        ,  0.        ,  0.        ,  1.        ]]
 
+# Other option: set Tgoal based on end effector position of a particular starting config
+#robot.SetDOFValues(joint_start_gazebo, manip.GetArmIndices())
+#Tgoal = manip.GetEndEffectorTransform()
 
 def iksolver(Tgoal):
     """
@@ -159,15 +162,16 @@ def iksolver(Tgoal):
 _,sols = iksolver(Tgoal)
 starting_configs = []
 starting_transforms = []
-goal_configs=[]
+
+robot.SetDOFValues(sols[0], manip.GetArmIndices())
+goal_transform = manip.GetEndEffectorTransform()
+goal_transform[:3][:,3][2] += 0.3  # For lifting
+goal_config,_ = iksolver(goal_transform)
+
 for sol in sols:
 	starting_configs.append(sol)
 	robot.SetDOFValues(sol, manip.GetArmIndices())
 	starting_transforms.append(manip.GetEndEffectorTransform())
-	goal_transform = manip.GetEndEffectorTransform()
-	goal_transform[:3][:,3][2] +=0.3
-	goal_config,_ = iksolver(goal_transform)
-	goal_configs.append(goal_config)
 
 #open gripper
 robot.SetDOFValues([1],[34])

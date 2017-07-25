@@ -19,6 +19,9 @@ from pyquaternion import Quaternion
 import globalvars
 from lfd.environment import sim_util
 
+#COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
+COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=20)
+#COST_FN_XSG = lambda x,s,g: cost_fun2(x, s, g, coeff=1000)
 
 def best_starting_config(): 
     """
@@ -26,17 +29,19 @@ def best_starting_config():
 
     returns starting configuration, goal configuration, and trajectory
     """
-    global sols,starting_configs,goal_configs
+    global sols,starting_configs,goal_config
     trajs = [] #list of lists
     costs = [] #list of lists
     print "len of sols: " + str(len(sols))
     for s in range(len(sols)):
         print s
-        candidate_attempt_traj = attempt_traj(starting_configs[s],goal_configs[s])
+        candidate_attempt_traj = attempt_traj(starting_configs[s],goal_config)
         trajs.append(candidate_attempt_traj) #append trajectory for a given ik solution
         waypt_costs = [] 
-        for waypt in candidate_attempt_traj:
-            waypt_costs.append(cost_projections(waypt,starting_configs[s],goal_configs[s],coeff=1000)) #calculate cost for each waypoint
+        for waypt in candidate_attempt_traj:  # TODO: Could consider only the last waypt's cost
+            #waypt_costs.append(cost_projections(waypt,starting_configs[s],goal_config,coeff=1000)) #calculate cost for each waypoint
+            #waypt_costs.append(cost_distance_bet_deltas(waypt,starting_configs[s],goal_config,coeff=1000)) #calculate cost for each waypoint
+            waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config))
         costs.append(waypt_costs) #appending list of costs
 
     
@@ -46,8 +51,7 @@ def best_starting_config():
     print "smallest vals: " + str(costs[idx])
     traj = trajs[idx]
     starting_config = starting_configs[idx]
-    goal_config = goal_configs[idx]
-    return starting_config, goal_config, traj
+    return starting_config, goal_config, traj, trajs
 
 def single_starting_config():
     """
@@ -61,7 +65,7 @@ def single_starting_config():
     starting_config = joint_start_gazebo #SPECIFY SPECIFIC STARTING CONFIG HERE
 
     goal_transform = manip.GetEndEffectorTransform()
-    goal_transform[:3][:,3][2] +=0.3
+    goal_transform[:3][:,3][2] += 0.3
     goal_config,_ = iksolver(goal_transform)
     traj = attempt_traj(starting_config,goal_config)
 
@@ -125,41 +129,10 @@ def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config,goal_
         {
             "type" : "joint_vel",
             #"params": {"coeffs" : [gamma/(n_steps-1)]}
-            "params": {"coeffs" : [5]}
+            "params": {"coeffs" : [1]}
         },            
         ],
-        "constraints" : [
-        #{                                                                             
-        #    "type" : "pose", 
-        #    "params" : {
-        #    "xyz" : xyz_target1, 
-        #    "wxyz" : quat_target1, 
-        #    "link": "r_gripper_palm_link",
-        #    "timestep" : n_steps-1,
-        #    "rot_coeffs" : [2,2,2],
-        #    "pos_coeffs" : [5,5,5]
-        #    }
-
-        #    # "type" : "joint", # joint-space target
-        #    # "params" : {"vals" : Final_pose.tolist() } # length of vals = # dofs of manip
-        #},
-
-        # {
-        #     "type" : "pose", 
-        #     "params" : {
-        #     "xyz" : xyz_wrist_target, 
-        #     "wxyz" : quat_target, 
-        #     "link": "r_gripper_r_link",
-        #     "timestep" : n_steps-1,
-        #     "rot_coeffs" : [0,0,0],
-        #     "pos_coeffs" : [1,1,1]
-        #     }
-
-
-        # }
-
-        ],
-
+        "constraints" : [],
         "init_info" : {
             #"type": "given_traj",
             #"data": init_traj.tolist()
@@ -185,9 +158,10 @@ def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config,goal_
     with openravepy.RobotStateSaver(robot):
       with util.suppress_stdout():
         prob = trajoptpy.ConstructProblem(s, robot.GetEnv()) # create object that stores optimization problem
-        cost_fn = lambda x: cost_fun2(x, starting_config, goal_config, coeff=1000)  #1000, 10000
-        for t in range(n_steps):
-            prob.AddCost(cost_fn, [(t,j) for j in range(7)], "table%i"%t)
+        cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config)
+        #for t in range(n_steps):
+        #    prob.AddCost(cost_fn, [(t,j) for j in range(7)], "table%i"%t)
+        prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
 
         print "optimizing prob to get result."
         result = trajoptpy.OptimizeProblem(prob) # do optimization
@@ -216,7 +190,7 @@ def visualize(traj):
         robot.SetDOFValues(traj[-1],manip.GetArmIndices())
         time.sleep(.5)
 
-def executePathSim(waypts):
+def executePathSim(waypts, reps=3):
     """
     Executes in the planned trajectory in simulation
     """
@@ -224,9 +198,18 @@ def executePathSim(waypts):
     
     #waypts = np.insert(waypts,0,starting_config,axis=0)
     #trajs = [waypts, np.flip(waypts,0)]
-    for _ in range(3):
+    for _ in range(reps):
         for w in waypts:
             robot.SetDOFValues(w,manip.GetArmIndices())
             time.sleep(.3)
 
+def main():
+    #s, g, traj = single_starting_config()
+    s, g, traj, all_trajs = best_starting_config()
+    executePathSim(traj, reps=1)
+    import IPython as ipy
+    ipy.embed()
+
+if __name__ == "__main__":
+    main()
  
