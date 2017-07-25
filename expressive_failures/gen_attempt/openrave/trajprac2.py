@@ -20,8 +20,8 @@ import globalvars
 from lfd.environment import sim_util
 
 #COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
-COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=20)
-#COST_FN_XSG = lambda x,s,g: cost_fun2(x, s, g, coeff=1000)
+#COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=20)
+COST_FN_XSG = lambda x,s,g: cost_fun2(x, s, g, alpha=1, coeff=100)
 
 def best_starting_config(): 
     """
@@ -155,17 +155,17 @@ def plan_follow_trajs(robot, manip_name, manip, xyz_target,starting_config,goal_
         request["constraints"].append(pose_constraint)
     #robot.SetDOFValues(starting_config, manip.GetArmIndices())
     s = json.dumps(request)
-    with openravepy.RobotStateSaver(robot):
-      with util.suppress_stdout():
-        prob = trajoptpy.ConstructProblem(s, robot.GetEnv()) # create object that stores optimization problem
-        cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config)
-        #for t in range(n_steps):
-        #    prob.AddCost(cost_fn, [(t,j) for j in range(7)], "table%i"%t)
-        prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
+    # with openravepy.RobotStateSaver(robot):
+    #   with util.suppress_stdout():
+    prob = trajoptpy.ConstructProblem(s, robot.GetEnv()) # create object that stores optimization problem
+    cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config)
+    #for t in range(n_steps):
+    #    prob.AddCost(cost_fn, [(t,j) for j in range(7)], "table%i"%t)
+    prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
 
-        print "optimizing prob to get result."
-        result = trajoptpy.OptimizeProblem(prob) # do optimization
-        print "done optimizing prob to get result."
+    print "optimizing prob to get result."
+    result = trajoptpy.OptimizeProblem(prob) # do optimization
+    print "done optimizing prob to get result."
 
     traj = result.GetTraj()
     dof_inds = sim_util.dof_inds_from_name(robot, manip_name)
@@ -204,8 +204,8 @@ def executePathSim(waypts, reps=3):
             time.sleep(.3)
 
 def main():
-    #s, g, traj = single_starting_config()
-    s, g, traj, all_trajs = best_starting_config()
+    s, g, traj = single_starting_config()
+    #s, g, traj, all_trajs = best_starting_config()
     executePathSim(traj, reps=1)
     import IPython as ipy
     ipy.embed()

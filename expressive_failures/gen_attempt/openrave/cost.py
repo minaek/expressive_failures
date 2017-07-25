@@ -40,7 +40,7 @@ def get_deltas(waypt, link_name,starting_config,goal_config):
     deltaL = (Lcurr-Lstart)
     return deltaEE, deltaL
 
-def features_fun2(waypt, starting_config, goal_config):
+def features_fun2(waypt, starting_config, goal_config, alpha):
     """
     The similarity + alpha*magnitude cost function
     """
@@ -49,16 +49,35 @@ def features_fun2(waypt, starting_config, goal_config):
 
     norm_deltaEE = np.linalg.norm(deltaEE)
     norm_deltaL = np.linalg.norm(deltaL)
-    alpha = 1
-    similarity = 1- scipy.spatial.distance.cosine(deltaEE,deltaL)
+    #similarity = 1- scipy.spatial.distance.cosine(deltaEE,deltaL)
+    similarity = np.dot(deltaEE,deltaL)/(norm_deltaEE * norm_deltaL)
+    theta = np.arccos(similarity)
+    magnitude = alpha*norm_deltaL
+    if norm_deltaL < 1e-10:
+        cosdist = 0.1
+        dist = 0.1
+        thetadist = 0.1
+    else: 
+        cosdist = (1 - similarity) / 20  # Range: [0, 0.1]
+        print "cosdist: " + str(cosdist)
+        thetadist = theta / 30
+        print "thetadist: " + str(thetadist)
+        dist = 0.1 - magnitude
+        print "dist: " + str(dist)
+    # print "similarity: " + str(magnitude)
 
-    return 1-(similarity+(alpha*norm_deltaL))
+    # print ".1-similarity: " + str(.1-(magnitude))
 
-def cost_fun2(waypt, starting_config, goal_config, coeff=1):
+    #return 0.1-distance
+    return 0.0001*thetadist + dist
+
+def cost_fun2(waypt, starting_config, goal_config, alpha=1, coeff=1):
     """
     The similarity + alpha*magnitude cost function
     """
-    feature = features_fun2(waypt,starting_config,goal_config)
+    feature = features_fun2(waypt,starting_config,goal_config,alpha)
+    print "feature: " + str(feature)
+    print "feature*coeff: " + str(feature*coeff) + "\n"
     return feature*coeff
 
 def features_projections(waypt, starting_config, goal_config, d):

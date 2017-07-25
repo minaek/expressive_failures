@@ -42,10 +42,10 @@ viewer.SetCamera(
 
 
 #for joint_works
-table.SetTransform([[ 0.   , -1.   ,  0.   ,  0.755],
-       [ 1.   ,  0.   ,  0.   ,  0.   ],
-       [ 0.   ,  0.   ,  1.   ,  0.689],
-       [ 0.   ,  0.   ,  0.   ,  1.   ]])
+# table.SetTransform([[ 0.   , -1.   ,  0.   ,  0.755],
+#        [ 1.   ,  0.   ,  0.   ,  0.   ],
+#        [ 0.   ,  0.   ,  1.   ,  0.689],
+#        [ 0.   ,  0.   ,  0.   ,  1.   ]])
 
 #for joint_start gazebo
 # target.SetTransform([[  2.22044605e-16,  -4.44089210e-16,   1.00000000e+00,
@@ -68,14 +68,14 @@ table.SetTransform([[ 0.   , -1.   ,  0.   ,  0.755],
 #           1.00000000e+00]])
 
 #for joint_start_works
-target.SetTransform([[  3.88578059e-16,  -2.22044605e-16,   1.00000000e+00,
-          5.50000000e-01],
-       [  1.00000000e+00,  -5.55111512e-17,  -3.88578059e-16,
-         -3.20000000e-01],
-       [  5.55111512e-17,   1.00000000e+00,   2.22044605e-16,
-          7.37000000e-01],
-       [  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
-          1.00000000e+00]])
+# target.SetTransform([[  3.88578059e-16,  -2.22044605e-16,   1.00000000e+00,
+#           5.50000000e-01],
+#        [  1.00000000e+00,  -5.55111512e-17,  -3.88578059e-16,
+#          -3.20000000e-01],
+#        [  5.55111512e-17,   1.00000000e+00,   2.22044605e-16,
+#           7.37000000e-01],
+#        [  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+#           1.00000000e+00]])
 
 
 ####FOR LEVER####
@@ -127,14 +127,17 @@ pull_start = [-0.31004544, -0.10073148, -1.27499825, -1.81371156, -2.90582601, -
 # lower,upper = robot.GetDOFLimits(manip.GetArmIndices()) # get the limits of just the arm indices #random
 # robot.SetDOFValues(lower+numpy.random.rand(len(lower))*(upper-lower),manip.GetArmIndices())
 
-Tgoal = [[ 0.25367689, -0.57112269,  0.78068362,  0.60407119],
+Tgoal = np.array([[ 0.25367689, -0.57112269,  0.78068362,  0.60407119],
        [-0.02689926,  0.80260678,  0.59590166, -0.19286113],
        [-0.96691492, -0.17216629,  0.18824001,  0.98687443],
-       [ 0.        ,  0.        ,  0.        ,  1.        ]]
+       [ 0.        ,  0.        ,  0.        ,  1.        ]])
+# Tgoal[:3][:,3][0] += np.random.uniform(-0.2,0.2)
+# Tgoal[:3][:,3][1] += np.random.uniform(-0.2,0.2)
+# Tgoal[:3][:,3][2] += np.random.uniform(-0.2,0.2)
 
 # Other option: set Tgoal based on end effector position of a particular starting config
-#robot.SetDOFValues(joint_start_gazebo, manip.GetArmIndices())
-#Tgoal = manip.GetEndEffectorTransform()
+robot.SetDOFValues(jsg_low, manip.GetArmIndices())
+Tgoal = manip.GetEndEffectorTransform()
 
 def iksolver(Tgoal):
     """
@@ -163,17 +166,20 @@ _,sols = iksolver(Tgoal)
 starting_configs = []
 starting_transforms = []
 
-robot.SetDOFValues(sols[0], manip.GetArmIndices())
-goal_transform = manip.GetEndEffectorTransform()
-goal_transform[:3][:,3][2] += 0.3  # For lifting
-goal_config,_ = iksolver(goal_transform)
+if len(sols)==0:
+	print "No solution found."
+else:
+	robot.SetDOFValues(sols[0], manip.GetArmIndices())
+	goal_transform = manip.GetEndEffectorTransform()
+	goal_transform[:3][:,3][2] += 0.3  # For lifting
+	goal_config,_ = iksolver(goal_transform)
 
-for sol in sols:
-	starting_configs.append(sol)
-	robot.SetDOFValues(sol, manip.GetArmIndices())
-	starting_transforms.append(manip.GetEndEffectorTransform())
+	for sol in sols:
+		starting_configs.append(sol)
+		robot.SetDOFValues(sol, manip.GetArmIndices())
+		starting_transforms.append(manip.GetEndEffectorTransform())
 
-#open gripper
-robot.SetDOFValues([1],[34])
+	#open gripper
+	robot.SetDOFValues([1],[34])
 
 
