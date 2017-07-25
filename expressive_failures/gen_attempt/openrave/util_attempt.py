@@ -10,8 +10,20 @@ from math import *
 # manip = globalvars.manip
 
 
+def c():
+    """
+    Plots the best trajectory found or planned
+    """
+    global env,robot,manip
+armids = list(manip.GetArmIndices()) #get arm indices
+links = robot.GetLinks()
+link_idx = links.index(robot.GetLink('r_shoulder_lift_link'))
+linkstrans = robot.GetLinkTransformations()
+Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
+env.plot3(points=Lcurr, pointsize=0.2, colors=(1,1,0), drawstyle=1)
 
-def plotTraj(bodies,waypts, color=[0, 1, 0]):
+
+def plotTraj(bodies,waypts, color=[1, 1, 0]):
     """
     Plots the best trajectory found or planned
     """
@@ -20,7 +32,7 @@ def plotTraj(bodies,waypts, color=[0, 1, 0]):
         dof = waypts[i]
         robot.SetDOFValues(dof, manip.GetArmIndices())
         coord = manip.GetEndEffectorTransform()[:3][:,3]     
-        bodies.append(env.plot3(points=coord, pointsize=0.05, colors=(color[0],color[1],color[2]), drawstyle=1))
+        bodies.append(env.plot3(points=coord, pointsize=0.05, colors=(1,1,0), drawstyle=1))
 
 
 def transform2quat(transform):
@@ -93,4 +105,6 @@ def ideal_traj(xyz_target):
     print "starting pos: " + str(starting_transform[:3][:,3])
 
     return traj
+
+
 
