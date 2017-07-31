@@ -10,6 +10,70 @@ from math import *
 # manip = globalvars.manip
 
 
+def get_rot_deltas(waypt, link_name, starting_config, goal_config):
+    global robot, manip
+    armids = list(manip.GetArmIndices()) #get arm indices
+    links = robot.GetLinks()
+    link_idx = links.index(robot.GetLink(link_name))
+
+    #current
+    robot.SetDOFValues(waypt,armids) # set dof values to current config
+    EEcurr_x = manip.GetEndEffectorTransform()[:3][:,0] #get EE q
+    EEcurr_y = manip.GetEndEffectorTransform()[:3][:,1] #get EE q
+    EEcurr_z = manip.GetEndEffectorTransform()[:3][:,2] #get EE q
+
+    linkstrans = robot.GetLinkTransformations()
+    Lcurr_x = linkstrans[link_idx][:3][:,0] #get xyz of specific link
+    Lcurr_y = linkstrans[link_idx][:3][:,1] #get xyz of specific link
+    Lcurr_z = linkstrans[link_idx][:3][:,2] #get xyz of specific link
+
+    #ideal
+    robot.SetDOFValues(goal_config,armids) #set dof valuue to ideal config
+    EEdesired_x = manip.GetEndEffectorTransform()[:3][:,0] #get EE q
+    EEdesired_y = manip.GetEndEffectorTransform()[:3][:,1] #get EE q
+    EEdesired_z = manip.GetEndEffectorTransform()[:3][:,2] #get EE q  
+    
+    linkstrans_d = robot.GetLinkTransformations()
+    Ldesired_x = linkstrans_d[link_idx][:3][:,0]
+    Ldesired_y = linkstrans_d[link_idx][:3][:,1]
+    Ldesired_z = linkstrans_d[link_idx][:3][:,2]
+    
+    #start
+    robot.SetDOFValues(starting_config,armids) #set dof valuue to starting config
+    EEstart_x = manip.GetEndEffectorTransform()[:3][:,0] #get EE q
+    EEstart_y = manip.GetEndEffectorTransform()[:3][:,1] #get EE q
+    EEstart_z = manip.GetEndEffectorTransform()[:3][:,2] #get EE q  
+
+    linkstrans_s = robot.GetLinkTransformations()
+    Lstart_x = linkstrans_s[link_idx][:3][:,0]
+    Lstart_y = linkstrans_s[link_idx][:3][:,1]
+    Lstart_z = linkstrans_s[link_idx][:3][:,2]
+
+
+    deltaEE_x = (EEdesired_x-EEstart_x)
+    deltaEE_y = (EEdesired_y-EEstart_y)
+    deltaEE_z = (EEdesired_z-EEstart_z)
+
+    deltaL_x = (Lcurr_x-Lstart_x)
+    deltaL_y = (Lcurr_y-Lstart_y)
+    deltaL_z = (Lcurr_z-Lstart_z)
+
+    return deltaEE_x, deltaEE_y, deltaEE_z, deltaL_x, deltaL_y, deltaL_z
+
+def rotation_matrix(axis, theta):
+    """
+    Return the rotation matrix associated with counterclockwise rotation about
+    the given axis by theta radians.
+    """
+    axis = np.asarray(axis)
+    axis = axis/math.sqrt(np.dot(axis, axis))
+    a = math.cos(theta/2.0)
+    b, c, d = -axis*math.sin(theta/2.0)
+    aa, bb, cc, dd = a*a, b*b, c*c, d*d
+    bc, ad, ac, ab, bd, cd = b*c, a*d, a*c, a*b, b*d, c*d
+    return np.array([[aa+bb-cc-dd, 2*(bc+ad), 2*(bd-ac)],
+                     [2*(bc-ad), aa+cc-bb-dd, 2*(cd+ab)],
+                     [2*(bd+ac), 2*(cd-ab), aa+dd-bb-cc]])
 def c():
     """
     Plots the best trajectory found or planned

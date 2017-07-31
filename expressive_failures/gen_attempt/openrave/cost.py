@@ -40,6 +40,32 @@ def get_deltas(waypt, link_name,starting_config,goal_config):
     deltaL = (Lcurr-Lstart)
     return deltaEE, deltaL
 
+def get_rot_deltas(waypt, link_name, starting_config, goal_config):
+    global robot, manip
+    armids = list(manip.GetArmIndices()) #get arm indices
+    links = robot.GetLinks()
+    link_idx = links.index(robot.GetLink(link_name))
+
+    #current
+    robot.SetDOFValues(waypt,armids) # set dof values to current config
+    linkstrans = robot.GetLinkTransformations()
+    Lcurr_rot =  linkstrans[link_idx][:3][:,:3]
+
+    #desired
+    robot.SetDOFValues(goal_config, armids)
+    EEdes_rot = manip.GetEndEffectorTransform()[:3][:,:3]
+
+    #start
+    robot.SetDOFValues(starting_config,armids)
+    EEstart_rot = manip.GetEndEffectorTransform()[:3][:,:3]
+    linkstrans_s = robot.GetLinkTransformations()
+    Lstart_rot = linkstrans_s[link_idx][:3][:,:3]
+
+    deltaEE_rot = np.dot(EEdes_rot,np.linalg.inv(EEstart_rot))
+    deltaL_rot = np.dot(Lcurr_rot,np.linalg.inv(Lstart_rot))
+
+    return deltaEE_rot, deltaL_rot
+
 def features_fun2(waypt, starting_config, goal_config, alpha):
     """
     The similarity + alpha*magnitude cost function
@@ -80,12 +106,38 @@ def cost_fun2(waypt, starting_config, goal_config, alpha=1, coeff=1):
     print "feature*coeff: " + str(feature*coeff) + "\n"
     return feature*coeff
 
+def features_projections_helper(deltaEE, deltaL, d):
+    norm_deltaEE = np.linalg.norm(deltaEE)
+    norm_deltaL = np.linalg.norm(deltaL)
+
+    if norm_deltaL < 1e-10:
+        proj = 0
+    else:
+        init_projection = np.dot(deltaEE,deltaL)/norm_deltaEE
+        cos_theta = np.dot(deltaEE,deltaL)/(norm_deltaEE * norm_deltaL)
+        proj = (init_projection*(cos_theta**(d-1)))
+    return proj 
+
 def features_projections(waypt, starting_config, goal_config, d):
     """
     The the second cost function we came up with that projects EL onto EE d times
     """
     link_name = 'r_elbow_flex_link'
     deltaEE,deltaL = get_deltas(waypt, link_name, starting_config, goal_config)
+    # deltaEE_x, deltaEE_y, deltaEE_z, deltaL_x, deltaL_y, deltaL_z = \
+    #     get_rot_deltas(waypt, link_name, starting_config, goal_config)
+
+    # deltaEE_rot, deltaL_rot = get_rot_deltas(waypt, link_name, starting_config, goal_config)
+
+    # proj_x = features_projections_helper(deltaEE_rot[:3][:,0], deltaL_rot[:3][:,0],d)
+    # proj_y = features_projections_helper(deltaEE_rot[:3][:,1], deltaL_rot[:3][:,1],d)
+    # proj_z = features_projections_helper(deltaEE_rot[:3][:,2], deltaL_rot[:3][:,2],d)
+    # # proj_p = features_projections_helper(deltaEE, deltaL,d)
+
+
+    # proj_x = np.dot(deltaEE_rot[:3][:,0], deltaL_rot[:3][:,0])
+    # proj_y = np.dot(deltaEE_rot[:3][:,1], deltaL_rot[:3][:,1])
+    # proj_z = np.dot(deltaEE_rot[:3][:,2], deltaL_rot[:3][:,2])
 
     norm_deltaEE = np.linalg.norm(deltaEE)
     norm_deltaL = np.linalg.norm(deltaL)
@@ -104,6 +156,19 @@ def cost_projections(waypt, starting_config, goal_config, d=7, coeff=1):
     The the second cost function we came up with that projects EL onto EE d times
     """
     feature = features_projections(waypt, starting_config, goal_config, d)
+    return feature*coeff
+
+
+def feature_base(waypt):
+    global base_positions,robot
+    for base in base_positions:
+        transform = robot.GetTransform()#reset base to original position
+        transform[:3][:,3] = base
+        robot.SetTransform(transform) 
+        
+
+def cost_base(waypt, coeff=1):
+    feature = features_base(waypt)
     return feature*coeff
 
 def features_distance_bet_deltas(waypt,starting_config,goal_config):
@@ -132,7 +197,7 @@ def features_distance_bet_deltas(waypt,starting_config,goal_config):
 
     # print "DOT PRODUCT: " + str(1-dotprod)
 
-    return 0.1 - proj
+    return .1 - proj
 
 def cost_distance_bet_deltas(waypt,starting_config,goal_config,coeff=1,):
     """

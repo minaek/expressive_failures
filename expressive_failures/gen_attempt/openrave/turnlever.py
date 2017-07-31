@@ -94,7 +94,7 @@ def main(env,options):
 
         planningutils.RetimeAffineTrajectory(traj,maxvelocities=ones(7),maxaccelerations=5*ones(7))
 
-    h=misc.DrawAxes(env,Ttarget0)
+    #h=misc.DrawAxes(env,Ttarget0)
     basemanip.MoveToHandPosition(matrices=[Tgrasp0])
     robot.WaitForController(0)
     taskmanip.CloseFingers()
@@ -121,12 +121,13 @@ def main(env,options):
 
     # also create reverse the trajectory and run infinitely
     trajectories = [outputtraj,planningutils.ReverseTrajectory(outputtraj)]
-    while True:
-        for traj in trajectories:
-            robot.GetController().SetPath(traj)
-            robot.WaitForController(0)
-        if options.testmode:
-            break
+    # while True:
+    #     for traj in trajectories:
+    #         robot.GetController().SetPath(traj)
+    #         robot.WaitForController(0)
+    #     if options.testmode:
+    #         break
+    return trajectories
     
 from optparse import OptionParser
 from openravepy.misc import OpenRAVEGlobalArguments
@@ -139,7 +140,7 @@ def run(args=None):
     """
     parser = OptionParser(description='Shows how to set a workspace trajectory for the hand and have a robot plan it.', usage='openrave.py --example pr2turnlever [options]')
     OpenRAVEGlobalArguments.addOptions(parser)
-    parser.add_option('--scene',action="store",type='string',dest='scene',default='data/pr2test1.env.xml',
+    parser.add_option('--scene',action="store",type='string',dest='scene',default='/home/viki/catkin_ws/src/expressive_failures/expressive_failures/gen_attempt/openrave/pr2test1.env.xml',
                       help='scene to load')
     (options, leftargs) = parser.parse_args(args=args)
     OpenRAVEGlobalArguments.parseAndCreateThreadedUser(options,main,defaultviewer=True)
