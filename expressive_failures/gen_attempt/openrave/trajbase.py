@@ -23,7 +23,7 @@ from pyquaternion import Quaternion
 import globalvars
 from lfd.environment import sim_util
 
-COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=10)
+COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=5)
 
 #COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
 
@@ -67,25 +67,23 @@ def position_base_request(starting_config, goal_config):
     linkstrans = robot.GetLinkTransformations()
     xyz_target = list(linkstrans[link_idx][:3][:,3]) #get xyz of specific link
     quat_target = list(Quaternion(matrix=linkstrans[link_idx])) #get quat of specific link
+    #robot.SetActiveDOFs(np.r_[robot.GetManipulator("rightarm").GetArmIndices()], #set arm and base as active dofs
+    #                DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1])
     robot.SetActiveDOFs(np.r_[robot.GetManipulator("rightarm").GetArmIndices()], #set arm and base as active dofs
-                    DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1])
+                    DOFAffine.X + DOFAffine.Y)
     #robot.SetActiveDOFs([], DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1]) #set base as only active dof
     request = {
         # BEGIN basic_info
         "basic_info" : {
             "n_steps" : n_steps,
             "manip" : "active",
-            "start_fixed" : False
+            "start_fixed" : True  # DOF values at first timestep are fixed based on current robot state
         },
         # END basic_info
         "costs" : [
         {
-            "type" : "collision",
-            "params" : {"coeffs" : [1],"dist_pen" : [0.025]}
-        },
-        {
             "type" : "joint_vel",
-            "params" : {"coeffs" : [5]}
+            "params" : {"coeffs" : [1]}
         }
         ],
         "constraints" : [
@@ -175,24 +173,25 @@ def executeBase(waypts, reps = 3, t=0.1):
     trans = robot.GetTransform()
     for _ in range(reps):
         for w in waypts:
-            trans[:3][:,3][:2] = w[-3:-1]
-            print w[-3:-1]
+            trans[:3][:,3][:2] = w[-2:]
+            print w[-2:]
             robot.SetTransform(trans)
             time.sleep(t)
 
 def executeBoth(waypts, starting_config, reps=3, t=0.1):
     global robot
+    print "First waypt starts at base location:", waypts[0][-2:]
     trans = robot.GetTransform()
     for _ in range(reps):
         reset = robot.GetTransform()
         reset[:3][:,3][:2] = [0,0]
         robot.SetTransform(reset)
-        robot. SetDOFValues(starting_config, manip.GetArmIndices())
-        # for w in waypts:
-        #     trans[:3][:,3][:2] = w[-3:-1]
-        #     robot.SetTransform(trans)
-        #     robot.SetDOFValues(w[:7],manip.GetArmIndices())
-        #     time.sleep(t)
+        robot.SetDOFValues(starting_config, manip.GetArmIndices())
+        for w in waypts:
+            trans[:3][:,3][:2] = w[-2:]
+            robot.SetTransform(trans)
+            robot.SetDOFValues(w[:7],manip.GetArmIndices())
+            time.sleep(t)
 
 def main():
     global manip, goal_config_stationary
