@@ -23,11 +23,42 @@ from pyquaternion import Quaternion
 import globalvars
 from lfd.environment import sim_util
 
-COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=20)
+COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=10)
 
+#COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
 
-def position_base_request():
-    global starting_config, robot, goal_config, manip
+def best_starting_config(): 
+    """
+    Optimizes for the best starting configuration.
+
+    returns starting configuration, goal configuration, and trajectory
+    """
+    global sols,starting_configs,goal_config_stationary,Tgoal
+    trajs = [] #list of lists
+    costs = [] #list of lists
+    print "len of sols: " + str(len(sols))
+    for s in range(len(sols)):
+        print s
+        candidate_attempt_traj = position_base_request(starting_configs[s],goal_config_stationary)
+        trajs.append(candidate_attempt_traj) #append trajectory for a given ik solution
+        waypt_costs = [] 
+        for waypt in candidate_attempt_traj:  # TODO: Could consider only the last waypt's cost
+            #waypt_costs.append(cost_projections(waypt,starting_configs[s],goal_config,coeff=1000)) #calculate cost for each waypoint
+            #waypt_costs.append(cost_distance_bet_deltas(waypt,starting_configs[s],goal_config,coeff=1000)) #calculate cost for each waypoint
+            waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary))
+        costs.append(waypt_costs) #appending list of costs
+
+    idx = np.argmin([sum(x) for x in costs]) #find the trajectory with the lowest cost sum
+    print "COSTS: " + str(costs)
+    print "idx: " + str(idx)
+    print "smallest vals: " + str(costs[idx])
+    traj = trajs[idx]
+    starting_config = starting_configs[idx]
+
+    return starting_config, goal_config_stationary, traj, trajs
+
+def position_base_request(starting_config, goal_config):
+    global robot
     n_steps = 10 #seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
     robot.SetDOFValues(starting_config, manip.GetArmIndices())
     armids = list(manip.GetArmIndices()) #get arm indices
@@ -90,8 +121,16 @@ def position_base_request():
     #robot.SetDOFValues(starting_config, manip.GetArmIndices())
     # request["init_info"]["type"] = "given_traj"
     # request["init_info"]["data"] = [dofvals_init.tolist()]
+
+
+    s = json.dumps(request)
+    prob = trajoptpy.ConstructProblem(s, env)
+    cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config_stationary)
+    prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
+    result = trajoptpy.OptimizeProblem(prob)
+    traj = result.GetTraj()
     
-    return request, dofvals_init
+    return traj
 
 def check_result(result, robot):
     print "checking trajectory for safety and constraint satisfaction..."
@@ -105,7 +144,6 @@ def check_result(result, robot):
             success = False
             print "constraint %s wasn't satisfied (%.2e > %.2e)"%(name, val, abstol)
     return success
-        
 
 def visualize(traj):
     for _ in range(5):
@@ -118,7 +156,7 @@ def visualize(traj):
         robot.SetDOFValues(traj[-1],manip.GetArmIndices())
         time.sleep(.5)
 
-def executePathSim(waypts, reps=3, t=0.1):
+def executeArm(waypts, reps=3, t=0.1):
     """
     Executes in the planned trajectory in simulation
     """
@@ -128,26 +166,52 @@ def executePathSim(waypts, reps=3, t=0.1):
     #trajs = [waypts, np.flip(waypts,0)]
     for _ in range(reps):
         for w in waypts:
-            robot.SetDOFValues(w,manip.GetArmIndices())
+            robot.SetDOFValues(w[:7],manip.GetArmIndices())
+            time.sleep(0.1)
+
+def executeBase(waypts, reps = 3, t=0.1):
+    global robot
+    trans = robot.GetTransform()
+    for _ in range(reps):
+        for w in waypts:
+            trans[:3][:,3][:2] = w[-3:-1]
+            print w[-3:-1]
+            robot.SetTransform(trans)
+            time.sleep(t)
+
+def executeBoth(waypts, starting_config, reps=3, t=0.1):
+    global robot
+    trans = robot.GetTransform()
+    for _ in range(reps):
+        reset = robot.GetTransform()
+        reset[:3][:,3][:2] = [0,0]
+        robot.SetTransform(reset)
+        robot. SetDOFValues(starting_config, manip.GetArmIndices())
+        for w in waypts:
+            trans[:3][:,3][:2] = w[-3:-1]
+            robot.SetTransform(trans)
+            robot.SetDOFValues(w[:7],manip.GetArmIndices())
             time.sleep(t)
 
 def main():
-    global starting_config,manip, goal_config_stationary
-    robot.SetDOFValues(starting_config, manip.GetArmIndices())
+    global manip, goal_config_stationary
     success = False
-        
-    for i_try in xrange(100):
-        request,init = position_base_request()
-        s = json.dumps(request)
-        # trajoptpy.SetInteractive(args.interactive)
-        prob = trajoptpy.ConstructProblem(s, env)
-        cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config_stationary)
-        prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
-        result = trajoptpy.OptimizeProblem(prob)
-        if check_result(result, robot): 
-            success = True
-            break
-    traj = result.GetTraj()
+    starting_config,_,traj,trajs = best_starting_config()
+    executeBoth(traj, starting_config)
+
+    # for i_try in xrange(100):
+    #     request= position_base_request()
+    #     s = json.dumps(request)
+    #     prob = trajoptpy.ConstructProblem(s, env)
+    #     cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config_stationary)
+    #     prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
+    #     result = trajoptpy.OptimizeProblem(prob)
+    #     if check_result(result, robot): 
+    #         success = True
+    #         break
+    # traj = result.GetTraj()
+
+
     #executePathSim(traj)
     #robot.SetDOFValues(starting_config, manip.GetArmIndices())
 
