@@ -74,30 +74,18 @@ def position_base_request():
         }
     }
 
-    #Initialize trajectory like this
+    ##Initialize trajectory as stationary##:
     request["init_info"]["type"] = "stationary"
 
-    #OR
-
-    #Initialize trajectory the way the example online does it
-    # BEGIN random_init
-    # randomly select joint values with uniform distribution over joint limits 
-    # lower,upper = robot.GetActiveDOFLimits()
-    # print len(lower)
-    # lower = np.clip(lower, -np.pi, np.pi) # continuous joints have huge ranges, so we clip them to [-pi, pi]
-    # upper = np.clip(upper, -np.pi, np.pi) # to avoid poor numerical conditioning
-    # rands = np.random.rand(len(lower))
-    # dofvals_init2 = lower*rands + upper*(1-rands)
-    # print len(dofvals_init2), len(lower)
-
-    dofvals_init = robot.GetActiveDOFValues()
-    print len(dofvals_init)
+    ##This is similar to how the online example initializes the traj##:
+    # dofvals_init = robot.GetActiveDOFValues()
+    # print len(dofvals_init)
     # we'll treat the base pose specially, choosing a random angle and then setting a reasonable
     # position based on this angle
-    angle_init = np.random.rand() * 2*np.pi
-    x_init = xyz_target[0] - .5*np.cos(angle_init)
-    y_init = xyz_target[1] - .5*np.sin(angle_init)    
-    dofvals_init[-3:] = [x_init, y_init, angle_init]
+    # angle_init = np.random.rand() * 2*np.pi
+    # x_init = xyz_target[0] - .5*np.cos(angle_init)
+    # y_init = xyz_target[1] - .5*np.sin(angle_init)    
+    # dofvals_init[-3:] = [x_init, y_init, angle_init]
     # END random_init
     #robot.SetDOFValues(starting_config, manip.GetArmIndices())
     # request["init_info"]["type"] = "given_traj"
