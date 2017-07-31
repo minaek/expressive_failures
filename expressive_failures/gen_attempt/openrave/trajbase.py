@@ -68,7 +68,7 @@ def position_base_request(starting_config, goal_config):
     xyz_target = list(linkstrans[link_idx][:3][:,3]) #get xyz of specific link
     quat_target = list(Quaternion(matrix=linkstrans[link_idx])) #get quat of specific link
     robot.SetActiveDOFs(np.r_[robot.GetManipulator("rightarm").GetArmIndices()], #set arm and base as active dofs
-                   DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1])
+                    DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1])
     #robot.SetActiveDOFs([], DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1]) #set base as only active dof
     request = {
         # BEGIN basic_info
@@ -81,11 +81,11 @@ def position_base_request(starting_config, goal_config):
         "costs" : [
         {
             "type" : "collision",
-            "params" : {"coeffs" : [10],"dist_pen" : [0.025]}
+            "params" : {"coeffs" : [1],"dist_pen" : [0.025]}
         },
         {
             "type" : "joint_vel",
-            "params" : {"coeffs" : [1]}
+            "params" : {"coeffs" : [5]}
         }
         ],
         "constraints" : [
@@ -129,7 +129,8 @@ def position_base_request(starting_config, goal_config):
     prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
     result = trajoptpy.OptimizeProblem(prob)
     traj = result.GetTraj()
-    
+    dof_inds = sim_util.dof_inds_from_name(robot, manip_name)
+    sim_util.unwrap_in_place(traj, dof_inds)
     return traj
 
 def check_result(result, robot):
@@ -187,17 +188,17 @@ def executeBoth(waypts, starting_config, reps=3, t=0.1):
         reset[:3][:,3][:2] = [0,0]
         robot.SetTransform(reset)
         robot. SetDOFValues(starting_config, manip.GetArmIndices())
-        for w in waypts:
-            trans[:3][:,3][:2] = w[-3:-1]
-            robot.SetTransform(trans)
-            robot.SetDOFValues(w[:7],manip.GetArmIndices())
-            time.sleep(t)
+        # for w in waypts:
+        #     trans[:3][:,3][:2] = w[-3:-1]
+        #     robot.SetTransform(trans)
+        #     robot.SetDOFValues(w[:7],manip.GetArmIndices())
+        #     time.sleep(t)
 
 def main():
     global manip, goal_config_stationary
     success = False
-    starting_config,_,traj,trajs = best_starting_config()
-    executeBoth(traj, starting_config)
+    s,g,traj,trajs = best_starting_config()
+    executeBoth(traj, s)
 
     # for i_try in xrange(100):
     #     request= position_base_request()
