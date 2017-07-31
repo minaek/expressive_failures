@@ -215,8 +215,8 @@ pushing_with_base = [-0.5,
 
 # Other option: set Tgoal based on end effector position of a particular starting config
 
-starting_config = pushing_with_base
-robot.SetDOFValues(starting_config, manip.GetArmIndices())
+handcrafted_starting = pushing_with_base
+robot.SetDOFValues(handcrafted_starting, manip.GetArmIndices())
 Tgoal = manip.GetEndEffectorTransform()
 
 def iksolver(Tgoal):
@@ -296,21 +296,26 @@ starting_transforms = []
 _,sols = iksolver(Tgoal)
 if len(sols)==0:
 	print "No solution found."
-
 else:
-	#for all else:
 	robot.SetDOFValues(sols[0], manip.GetArmIndices())
 	goal_transform = manip.GetEndEffectorTransform()
 	#goal_transform[:3][:,3][2] -= 0.2  # For lifting, should not make this too high, or else arm will stay still
 	#goal_transform[:3][:,3][1] += 0.2  # For pulling lever
-	goal_transform[:3][:,3][0] += 0.2  # For pulling lever
-	goal_config_stationary,_ = iksolver(goal_transform)
-	for sol in sols:
-		starting_configs.append(sol)
-		robot.SetDOFValues(sol, manip.GetArmIndices())
-		#starting_transforms.append(manip.GetEndEffectorTransform())
+	goal_transform[:3][:,3][0] += 0.1  # For pulling lever
+	goal_config_stationary,x = iksolver(goal_transform)
+	if goal_config_stationary is None:
+		print "No goal solution found."
+	else:
+		robot.SetDOFValues(x[2], manip.GetArmIndices())
+		tr = manip.GetEndEffectorTransform()
+		assert (goal_transform-tr<1e-10).all()
+		for sol in sols:
+			robot.SetDOFValues(sol, manip.GetArmIndices())
+			trans = manip.GetEndEffectorTransform()
+			assert (trans-Tgoal < 1e-10).all()
+			starting_configs.append(sol)
 
-	#open gripper
-	robot.SetDOFValues([1],[34])
+		#open gripper
+		robot.SetDOFValues([1],[34])
 
 
