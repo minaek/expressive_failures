@@ -28,7 +28,7 @@ COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=20)
 
 def position_base_request():
     global starting_config, robot, goal_config, manip
-    n_steps = 10 #nsteps needs to be defined as 1 for the base it seems like..doesn't work with larger numbers
+    n_steps = 10 #seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
     robot.SetDOFValues(starting_config, manip.GetArmIndices())
     armids = list(manip.GetArmIndices()) #get arm indices
     links = robot.GetLinks()
