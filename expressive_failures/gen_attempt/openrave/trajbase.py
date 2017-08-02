@@ -23,9 +23,12 @@ from pyquaternion import Quaternion
 import globalvars
 from lfd.environment import sim_util
 
-COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=5)
-
+COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=8)
 #COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
+
+COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=8)
+
+N_STEPS=10
 
 def best_starting_config(): 
     """
@@ -42,24 +45,40 @@ def best_starting_config():
         candidate_attempt_traj = position_base_request(starting_configs[s],goal_config_stationary)
         trajs.append(candidate_attempt_traj) #append trajectory for a given ik solution
         waypt_costs = [] 
-        for waypt in candidate_attempt_traj:  # TODO: Could consider only the last waypt's cost
-            #waypt_costs.append(cost_projections(waypt,starting_configs[s],goal_config,coeff=1000)) #calculate cost for each waypoint
-            #waypt_costs.append(cost_distance_bet_deltas(waypt,starting_configs[s],goal_config,coeff=1000)) #calculate cost for each waypoint
+        for waypt in candidate_attempt_traj:  
             waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary))
+
         costs.append(waypt_costs) #appending list of costs
 
     idx = np.argmin([sum(x) for x in costs]) #find the trajectory with the lowest cost sum
-    print "COSTS: " + str(costs)
-    print "idx: " + str(idx)
-    print "smallest vals: " + str(costs[idx])
+    #print "COSTS: " + str(costs)
+    #print "idx: " + str(idx)
+    #print "smallest vals: " + str(costs[idx])
     traj = trajs[idx]
     starting_config = starting_configs[idx]
 
     return starting_config, goal_config_stationary, traj, trajs
 
+def optimize_starting_and_cost():
+    global sols,starting_configs,goal_config_stationary,Tgoal, COST_FN_XSG, COST_FN_BASE
+    trajs = [] #list of lists
+    costs = [] #list of lists
+    print "len of sols: " + str(len(sols))
+    for s in range(len(sols)):
+        print s
+        for c in range(1,21):
+            COST_FN_XSG = lambda x,s,g: cost_projections(x,s,g,d=3,coeff=c) #update cost functions 
+            COST_FN_BASE=lambda x,s,g: base(x,s,g,d=3,coeff=c)
+            candidate_attempt_traj = position_base_request(starting_configs[s],goal_config_stationary)
+            trajs.append(candidate_attempt_traj) #append trajectory for a given ik solution
+            waypt_costs = [] 
+            for waypt in candidate_attempt_traj:  
+                waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary,d=3,coeff=c))
+            costs.append(waypt_costs) #appending list of costs
+
 def position_base_request(starting_config, goal_config):
     global robot
-    n_steps = 10 #seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
+    n_steps = N_STEPS #seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
     robot.SetDOFValues(starting_config, manip.GetArmIndices())
     armids = list(manip.GetArmIndices()) #get arm indices
     links = robot.GetLinks()
@@ -67,16 +86,16 @@ def position_base_request(starting_config, goal_config):
     linkstrans = robot.GetLinkTransformations()
     xyz_target = list(linkstrans[link_idx][:3][:,3]) #get xyz of specific link
     quat_target = list(Quaternion(matrix=linkstrans[link_idx])) #get quat of specific link
-    #robot.SetActiveDOFs(np.r_[robot.GetManipulator("rightarm").GetArmIndices()], #set arm and base as active dofs
-    #                DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1])
-    robot.SetActiveDOFs(np.r_[robot.GetManipulator("rightarm").GetArmIndices()], #set arm and base as active dofs
-                    DOFAffine.X + DOFAffine.Y)
-    #robot.SetActiveDOFs([], DOFAffine.X + DOFAffine.Y + DOFAffine.RotationAxis, [0,0,1]) #set base as only active dof
+    robot.SetActiveDOFs(np.r_[robot.GetManipulator("rightarm").GetArmIndices()], DOFAffine.X + DOFAffine.Y)
+
+    #robot.SetActiveDOFs([], DOFAffine.X + DOFAffine.Y) #set base as only active dof
+    #robot.SetActiveDOFs(np.r_[robot.GetManipulator("rightarm").GetArmIndices()])
     request = {
         # BEGIN basic_info
         "basic_info" : {
             "n_steps" : n_steps,
             "manip" : "active",
+            #'manip': 'rightarm',
             "start_fixed" : True  # DOF values at first timestep are fixed based on current robot state
         },
         # END basic_info
@@ -91,7 +110,7 @@ def position_base_request(starting_config, goal_config):
             "type" : "pose",
             "name" : "final_pose",
             "params" : {
-                "pos_coeffs" : [5,5,5],
+                "pos_coeffs" : [6,6,6],
                 "rot_coeffs" : [2,2,2],
                 "xyz" : list(xyz_target),
                 "wxyz" : list(quat_target),
@@ -124,7 +143,12 @@ def position_base_request(starting_config, goal_config):
     s = json.dumps(request)
     prob = trajoptpy.ConstructProblem(s, env)
     cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config_stationary)
+    cost_fn2  = lambda x: COST_FN_BASE(x, starting_config, goal_config_stationary)
+    #for n in range(n_steps):
+    #    prob.AddCost(cost_fn2, [(n,j) for j in range(7)], "base%i"%(n))
+
     prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
+    prob.AddCost(cost_fn2, [(n_steps-1,j) for j in range(7,9)], "base%i"%(n_steps-1))
     result = trajoptpy.OptimizeProblem(prob)
     traj = result.GetTraj()
     dof_inds = sim_util.dof_inds_from_name(robot, manip_name)
@@ -183,21 +207,69 @@ def executeBoth(waypts, starting_config, reps=3, t=0.1):
     print "First waypt starts at base location:", waypts[0][-2:]
     trans = robot.GetTransform()
     for _ in range(reps):
-        reset = robot.GetTransform()
-        reset[:3][:,3][:2] = [0,0]
-        robot.SetTransform(reset)
-        robot.SetDOFValues(starting_config, manip.GetArmIndices())
         for w in waypts:
             trans[:3][:,3][:2] = w[-2:]
             robot.SetTransform(trans)
             robot.SetDOFValues(w[:7],manip.GetArmIndices())
             time.sleep(t)
 
+
+
+def executeBothTimed(waypts, starting_config, reps=3, \
+                     attempt_speed=1.0, reset_speed=0.2):
+    # attempt_speed, reset_speed - in units of change in configuration space per second
+
+    global robot
+    trans = robot.GetTransform()
+
+    # Set robot to starting configuration
+    Tstart = robot.GetTransform()
+    Tstart[:3][:,3][:2] = [0,0]
+    robot.SetTransform(Tstart)
+    robot.SetDOFValues(starting_config, manip.GetArmIndices())
+
+    # Compute average distance between waypoints
+    avg_norm = 0
+    for idx in range(len(waypts)-1):
+        avg_norm += np.linalg.norm(waypts[idx+1] - waypts[idx])
+    avg_norm /= len(waypts) - 1
+    print "avg_norm:", avg_norm
+
+    t_attempt = avg_norm / attempt_speed
+    t_reset = avg_norm / reset_speed
+
+    for _ in range(reps):
+        # Attempt
+        for w in waypts:
+            trans[:3][:,3][:2] = w[-2:]
+            robot.SetTransform(trans)
+            robot.SetDOFValues(w[:7],manip.GetArmIndices())
+            time.sleep(t_attempt)
+        time.sleep(0.1)
+        # Reset
+        for w in waypts[::-1][1:]:
+            trans[:3][:,3][:2] = w[-2:]
+            robot.SetTransform(trans)
+            robot.SetDOFValues(w[:7],manip.GetArmIndices())
+            time.sleep(t_reset)
+
+
+def calculate_EE_movement(traj):
+    deviation=0
+    for waypt in traj:
+        robot.SetDOFValues(waypt, manip.GetArmIndices())
+        EE_pos = manip.GetEndEffectorTransform()[:3][:,3]
+        EE_goal_pos = Tgoal[:3][:,3]
+        deviation+=np.abs(np.linalg.norm(EE_goal_pos-EE_pos))
+    return deviation/N_STEPS
+
+
 def main():
-    global manip, goal_config_stationary
     success = False
     s,g,traj,trajs = best_starting_config()
-    executeBoth(traj, s)
+    deviation = calculate_EE_movement(traj)
+    print "EE deviation: " + str(deviation)
+    executeBothTimed(traj, s, attempt_speed=0.3, reset_speed=0.9)
 
     # for i_try in xrange(100):
     #     request= position_base_request()
@@ -227,3 +299,12 @@ def main():
 if __name__ == "__main__":
     main()
  
+
+#EE deviation: 0.333814612829
+#EE deviation: 3.82393223776
+#0.0764786447552 N = 50
+#EE deviation: 1.29652855485e-09, N=100, does not move
+
+#EE deviation: 0.0792912272914, N=100, cost function coefficients = 10 
+
+#0.0777673460262 N=100, cost function coefficients = 10 
