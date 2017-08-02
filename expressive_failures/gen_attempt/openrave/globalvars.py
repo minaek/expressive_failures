@@ -103,7 +103,9 @@ viewer.SetCamera(
 
 manip_left = robot.GetManipulator("leftarm")
 left_arm_dofs = [1.0, -0.05, 1, -1.5, 1.0, -1.0, 0.0] #left arm dofs for joint_start_works
-robot.SetDOFValues(left_arm_dofs, manip_left.GetArmIndices())
+left_arm_attitude = [ 1.4,  0.3,  2.9, -1.9,  0. ,  0. ,  0. ]
+left_arm_straight_by_side = [ 1.2,  1. ,  0. ,  0. ,  0. ,  0. ,  0. ]
+robot.SetDOFValues(left_arm_attitude, manip_left.GetArmIndices())
 manip = robot.GetManipulator("rightarm")
 robot.SetActiveManipulator(manip)
 manip_name = "rightarm"
@@ -201,6 +203,33 @@ pushing_with_base = [-0.5,
  -1.7999999999999998,
  -0.10000004,
  -0.4]
+
+pushing_flat_wrist = [-0.5,
+ -0.20000000000000004,
+ -1.4,
+ -1.5000000000000002,
+ -1.7999999999999998,
+ -0.10000004,
+ 1.8000000000000005]
+
+pushing_flat_wrist2 = [-0.5,
+ -0.20000000000000004,
+ -1.4,
+ -1.8000000000000005,
+ -1.7999999999999998,
+ -0.10000004,
+ 1.8000000000000005]
+
+flat_wrist3 = [-0.30000000000000004, #farther out
+ -0.20000000000000004,
+ -1.4,
+ -1.3,
+ -1.7999999999999998,
+ -0.10000004,
+ 1.8000000000000005]
+
+
+
 #random initial positions
 # lower,upper = robot.GetDOFLimits(manip.GetArmIndices()) # get the limits of just the arm indices #random
 # robot.SetDOFValues(lower+numpy.random.rand(len(lower))*(upper-lower),manip.GetArmIndices())
@@ -215,7 +244,7 @@ pushing_with_base = [-0.5,
 
 # Other option: set Tgoal based on end effector position of a particular starting config
 
-handcrafted_starting = pushing_with_base
+handcrafted_starting = jsg_low
 robot.SetDOFValues(handcrafted_starting, manip.GetArmIndices())
 Tgoal = manip.GetEndEffectorTransform()
 
@@ -299,14 +328,14 @@ if len(sols)==0:
 else:
 	robot.SetDOFValues(sols[0], manip.GetArmIndices())
 	goal_transform = manip.GetEndEffectorTransform()
-	#goal_transform[:3][:,3][2] -= 0.2  # For lifting, should not make this too high, or else arm will stay still
-	#goal_transform[:3][:,3][1] += 0.2  # For pulling lever
-	goal_transform[:3][:,3][0] += 0.1  # For pulling lever
-	goal_config_stationary,x = iksolver(goal_transform)
+	#goal_transform[:3][:,3][2] += 0.2  # For lifting, should not make this too high, or else arm will stay still
+	#goal_transform[:3][:,3][1] -= 0.1  # For pulling lever
+	goal_transform[:3][:,3][0] -= 0.1  # For pulling lever
+	goal_config_stationary,_ = iksolver(goal_transform)
 	if goal_config_stationary is None:
 		print "No goal solution found."
 	else:
-		robot.SetDOFValues(x[2], manip.GetArmIndices())
+		robot.SetDOFValues(goal_config_stationary, manip.GetArmIndices())
 		tr = manip.GetEndEffectorTransform()
 		assert (goal_transform-tr<1e-10).all()
 		for sol in sols:
@@ -316,6 +345,6 @@ else:
 			starting_configs.append(sol)
 
 		#open gripper
-		robot.SetDOFValues([1],[34])
+		#robot.SetDOFValues([1],[34])
 
 
