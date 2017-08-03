@@ -23,10 +23,10 @@ from pyquaternion import Quaternion
 import globalvars
 from lfd.environment import sim_util
 
-COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=8)
+COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=20)
 #COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
 
-COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=8)
+COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=20)
 
 N_STEPS=10
 
@@ -39,14 +39,17 @@ def best_starting_config():
     global sols,starting_configs,goal_config_stationary,Tgoal
     trajs = [] #list of lists
     costs = [] #list of lists
+    results = [] #contains result from solving TrajOpt problems
     print "len of sols: " + str(len(sols))
     for s in range(len(sols)):
         print s
-        candidate_attempt_traj = position_base_request(starting_configs[s],goal_config_stationary)
+        candidate_attempt_traj, result = position_base_request(starting_configs[s],goal_config_stationary)
         trajs.append(candidate_attempt_traj) #append trajectory for a given ik solution
+        results.append(result)
         waypt_costs = [] 
         for waypt in candidate_attempt_traj:  
             waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary))
+            waypt_costs.append(COST_FN_BASE(waypt, starting_configs[s], goal_config_stationary))
 
         costs.append(waypt_costs) #appending list of costs
 
@@ -76,9 +79,12 @@ def optimize_starting_and_cost():
                 waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary,d=3,coeff=c))
             costs.append(waypt_costs) #appending list of costs
 
-def position_base_request(starting_config, goal_config):
+def position_base_request(starting_config, goal_config, init_position=[0,0]):
     global robot
     n_steps = N_STEPS #seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
+    T = robot.GetTransform()
+    T[:,3][:2] = init_position
+    robot.SetTransform(T)
     robot.SetDOFValues(starting_config, manip.GetArmIndices())
     armids = list(manip.GetArmIndices()) #get arm indices
     links = robot.GetLinks()
@@ -106,17 +112,17 @@ def position_base_request(starting_config, goal_config):
         }
         ],
         "constraints" : [
-        {
-            "type" : "pose",
-            "name" : "final_pose",
-            "params" : {
-                "pos_coeffs" : [6,6,6],
-                "rot_coeffs" : [2,2,2],
-                "xyz" : list(xyz_target),
-                "wxyz" : list(quat_target),
-                "link" : "r_gripper_palm_link",
-            },
-        }
+        #{
+            #"type" : "pose",
+            #"name" : "final_pose",
+            #"params" : {
+            #    "pos_coeffs" : [6,6,6],
+            #    "rot_coeffs" : [2,2,2],
+            #    "xyz" : list(xyz_target),
+            #    "wxyz" : list(quat_target),
+            #    "link" : "r_gripper_palm_link",
+            #},
+        #}
         ],
         "init_info" : {
         }
@@ -124,6 +130,19 @@ def position_base_request(starting_config, goal_config):
 
     ##Initialize trajectory as stationary##:
     request["init_info"]["type"] = "stationary"
+
+    for i in range(n_steps):
+        request["constraints"].append({
+            "type" : "pose",
+            "name" : "pose"+str(i),
+            "params" : {
+                "pos_coeffs" : [6,6,6],
+                "rot_coeffs" : [2,2,2],
+                "xyz" : list(xyz_target),
+                "wxyz" : list(quat_target),
+                "link" : "r_gripper_palm_link",
+                "timestep": i,
+            }})
 
     ##This is similar to how the online example initializes the traj##:
     # dofvals_init = robot.GetActiveDOFValues()
@@ -142,6 +161,7 @@ def position_base_request(starting_config, goal_config):
 
     s = json.dumps(request)
     prob = trajoptpy.ConstructProblem(s, env)
+
     cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config_stationary)
     cost_fn2  = lambda x: COST_FN_BASE(x, starting_config, goal_config_stationary)
     #for n in range(n_steps):
@@ -153,7 +173,7 @@ def position_base_request(starting_config, goal_config):
     traj = result.GetTraj()
     dof_inds = sim_util.dof_inds_from_name(robot, manip_name)
     sim_util.unwrap_in_place(traj, dof_inds)
-    return traj
+    return traj, result
 
 def check_result(result, robot):
     print "checking trajectory for safety and constraint satisfaction..."
