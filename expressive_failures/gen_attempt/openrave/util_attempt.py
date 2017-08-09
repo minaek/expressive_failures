@@ -84,7 +84,7 @@ links = robot.GetLinks()
 link_idx = links.index(robot.GetLink('r_shoulder_lift_link'))
 linkstrans = robot.GetLinkTransformations()
 Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
-env.plot3(points=Lcurr, pointsize=0.2, colors=(1,1,0), drawstyle=1)
+env.plot3(points=Lcurr, pointsize=0.05, colors=(1,1,0), drawstyle=1)
 
 
 def plotTraj(bodies,waypts, color=[1, 1, 0]):

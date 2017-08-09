@@ -166,6 +166,13 @@ def base(waypt, starting_config, goal_config, d=3,coeff=1):
     linkstrans = robot.GetLinkTransformations()
     Bcurr = linkstrans[link_idx][:3][:,3][:2] #get xy of specific link
 
+    # Set robot to starting base position of [0,0]
+    trans[:,3][:2] = [0,0]
+    robot.SetTransform(trans)
+
+    linkstrans = robot.GetLinkTransformations()
+    Bstart = linkstrans[link_idx][:,3][:2] #get xy of specific link
+
     #ideal
     robot.SetDOFValues(goal_config,armids) #set dof value to ideal config
     EEdesired = manip.GetEndEffectorTransform()[:3][:,3][:2] #get EE qd    
@@ -175,20 +182,21 @@ def base(waypt, starting_config, goal_config, d=3,coeff=1):
     EEstart = manip.GetEndEffectorTransform()[:3][:,3][:2]
 
     Bdes = (EEdesired-EEstart)
+    Bdelta = (Bcurr-Bstart)
 
     norm_ideal_base = np.linalg.norm(Bdes)
-    norm_curr_base = np.linalg.norm(Bcurr)
+    norm_curr_base = np.linalg.norm(Bdelta)
     if norm_curr_base < 1e-10:
         proj = 0
     else:
-        init_projection = np.dot(Bdes, Bcurr)/norm_ideal_base
-        cos_theta = np.dot(Bdes, Bcurr)/(norm_curr_base*norm_ideal_base)
+        init_projection = np.dot(Bdes, Bdelta)/norm_ideal_base
+        cos_theta = np.dot(Bdes, Bdelta)/(norm_curr_base*norm_ideal_base)
         proj = (init_projection*(cos_theta**(d-1)))
 
-    print proj
-    print scalar 
     scalar = .2-proj
-    return scalar*coeff #this works better than the projection 
+    #print proj
+    #print scalar 
+    return scalar*coeff #this works better than the projection
 
 
 def get_delta(waypt, link_name,starting_config,goal_config):
