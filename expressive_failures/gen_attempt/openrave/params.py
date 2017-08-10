@@ -3,6 +3,10 @@ This module defines parameters for different tasks.
 Can custom define own parameters. 
 """
 import numpy as np 
+import os.path as osp
+
+OR_LOCATION = "/home/shhuang/src"
+#OR_LOCATION = "/home/viki"
 
 def get_Tgoal(dofs):
     robot.SetDOFValues(dofs, manip.GetArmIndices())
@@ -11,8 +15,8 @@ def get_Tgoal(dofs):
 
 LIFT = { "name": "lift",
         "vector": +0.2, "axis": 2, #vector specifies direction (+/-) and magnitude (numeric value)
-        "target": ['/home/viki/openrave/src/data/mug1.kinbody.xml'],
-        "props": ['/home/viki/openrave/src/data/table.kinbody.xml'],
+        "target": [osp.join(OR_LOCATION,'openrave/src/data/mug1.kinbody.xml')],
+        "props": [osp.join(OR_LOCATION,'openrave/src/data/table.kinbody.xml')],
         "camera_array": np.array([[ -9.94542311e-03,   5.43414497e-01,  -8.39405607e-01,
                                     2.32253075e+00],
                                  [  9.99869989e-01,   1.60593593e-02,  -1.45012309e-03,
@@ -41,7 +45,7 @@ LIFT = { "name": "lift",
 
 PUSH = { "name": "push",
         "vector": +0.05, "axis": 0, #vector specifies direction (+/-) and magnitude (numeric value)
-        "target": ['/home/viki/openrave/src/data/door_pushing.kinbody.xml'],
+        "target": [osp.join(OR_LOCATION, 'openrave/src/data/door_pushing.kinbody.xml')],
         "props": [],
         "camera_array": np.array([[ 0.5401757 , -0.2197591 ,  0.81235223, -1.81661725],
                                    [-0.83860444, -0.22128981,  0.49776843, -2.28017688],
@@ -65,7 +69,7 @@ PUSH = { "name": "push",
 
 PULL = { "name": "pull",
         "vector": -0.05, "axis": 0, #vector specifies direction (+/-) and magnitude (numeric value)
-        "target": ['/home/viki/openrave/src/data/pulling_cabinet.kinbody.xml'],
+        "target": [osp.join(OR_LOCATION, 'openrave/src/data/pulling_cabinet.kinbody.xml')],
         "props": [],
         "camera_array": np.array([[ 0.973865  , -0.02354918,  0.22590351, -0.16039696],
                                    [-0.22070635, -0.33294749,  0.91675224, -1.67684126],
@@ -88,7 +92,7 @@ PULL = { "name": "pull",
 
 PULL_DOWN = { "name": "pull_down",
         "vector": -0.2, "axis": 2, #vector specifies direction (+/-) and magnitude (numeric value)
-        "target": ['/home/viki/openrave/src/data/door.kinbody.xml'],
+        "target": [osp.join(OR_LOCATION, 'openrave/src/data/door.kinbody.xml')],
         "props": [],
         "camera_array": np.array([[ 0.62627933, -0.11861086,  0.77052298, -1.12960267],
                                    [-0.77811915, -0.15596732,  0.60844457, -1.68664968],
@@ -111,7 +115,7 @@ PULL_DOWN = { "name": "pull_down",
 
 PUSH_SIDEWAYS = { "name": "push_sideways",
         "vector": +0.05, "axis": 1, #vector specifies direction (+/-) and magnitude (numeric value)
-        "target": ['/home/viki/openrave/src/data/ikeashelf.kinbody.xml'],
+        "target": [osp.join(OR_LOCATION, 'openrave/src/data/ikeashelf.kinbody.xml')],
         "props": [],
         "camera_array": np.array([[ 0.81611115,  0.25427317, -0.51894869,  1.25672853],
                                    [ 0.57673235, -0.3014324 ,  0.75928803, -1.29225791],
