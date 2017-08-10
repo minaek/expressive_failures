@@ -13,7 +13,6 @@ from trajoptpy.check_traj import traj_is_safe
 import numpy as np, math
 import json
 from openravepy import *
-import trajoptpy
 from lfd.util import util
 import time
 from math import *
@@ -34,6 +33,7 @@ MEDIUM = 0.75
 SLOW = 0.3
 
 BASE = True #flag. If True, we optimize for base as well 
+EXCLUDE_GRIPPER_COLLISIONS_FOR_ATTEMPT = True
 
 def best_starting_config(): 
     """
@@ -59,11 +59,18 @@ def best_starting_config():
             waypt_costs.append(total_cost)
             #waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary))
             #waypt_costs.append(COST_FN_BASE(waypt, starting_configs[s], goal_config_stationary))
+
+        # check to see whether collision costs are zero
+        coll_cost = np.sum([y for x,y in result.GetCosts() if x.startswith("collision")])
+        if coll_cost > 1e-3:
+            waypt_costs.append(1000)
+
         costs.append(waypt_costs) #appending list of costs
 
     idx = np.argmin([sum(x) for x in costs]) #find the trajectory with the lowest cost sum
     traj = trajs[idx]
     starting_config = starting_configs[idx]
+
     #print [r.GetCosts()[-2][1] - costs[i][-2] for i,r in enumerate(results)]   # this compares the elbow cost
     #print [r.GetCosts()[-1][1] - costs[i][-1] for i,r in enumerate(results)]  # this compares the base cost
     return starting_config, goal_config_stationary, traj, trajs, result, costs, idx, results
@@ -438,7 +445,8 @@ def interpolate(start, goal, num_waypts):
     return init_waypts
 
 
-def pre_motion_traj(premotion_starting_config, attempt_starting_config):
+def pre_motion_traj(premotion_starting_config, attempt_starting_config, \
+                    joint_vel_coeff=20, collision_coeff=20, init_traj_input=None):
     #global n_steps, Final_pose, manip, ideal_config, ideal_config_vanilla
     n_steps = 30
 
@@ -463,12 +471,12 @@ def pre_motion_traj(premotion_starting_config, attempt_starting_config):
         "costs" : [
         {
             "type" : "joint_vel",
-            "params": {"coeffs" : [20]}
+            "params": {"coeffs" : [joint_vel_coeff]}
         },
         {
             "type" : "collision",
             "params" : {
-                "coeffs" : [20], # penalty coefficients. list of length one is automatically expanded to a list of length n_timesteps
+                "coeffs" : [collision_coeff], # penalty coefficients. list of length one is automatically expanded to a list of length n_timesteps
               "dist_pen" : [0.025] # robot-obstacle distance that penalty kicks in. expands to length n_timesteps
                 }   
         }, 
@@ -491,11 +499,18 @@ def pre_motion_traj(premotion_starting_config, attempt_starting_config):
         "init_info" : {
            #"type": "given_traj",
            #"data": init_traj.tolist()
-           "type": "straight_line",
-           "endpoint": attempt_starting_config.tolist()
+           #"type": "straight_line",
+           #"endpoint": attempt_starting_config.tolist()
            #"type": "stationary",
         }   
     }
+
+    if init_traj_input is None:
+        request["init_info"]["type"] = "straight_line"
+        request["init_info"]["endpoint"] = attempt_starting_config.tolist()
+    else:
+        request["init_info"]["type"] = "given_traj"
+        request["init_info"]["data"] = init_traj_input.tolist()
 
 
     s = json.dumps(request)
@@ -508,12 +523,12 @@ def pre_motion_traj(premotion_starting_config, attempt_starting_config):
     dof_inds = sim_util.dof_inds_from_name(robot, manip_name)
     sim_util.unwrap_in_place(traj, dof_inds)
     
-    return traj
+    return traj, result
 
 
-def premotion(premotion_starting_config, attempt_starting_config):
+def premotion(premotion_starting_config, attempt_starting_config, **kwargs):
     robot.SetDOFValues(premotion_starting_config, manip.GetArmIndices())
-    pre_motion = pre_motion_traj(premotion_starting_config, attempt_starting_config)
+    pre_motion = pre_motion_traj(premotion_starting_config, attempt_starting_config, **kwargs)
     return pre_motion
 
 def difference_in_traj(traj):
@@ -549,19 +564,51 @@ def gripper_after():
         v[robot.GetJoint('r_gripper_l_finger_joint').GetDOFIndex()] = 0.1
         robot.SetDOFValues(v)             
 
+def exclude_gripper_collisions(opposite=False, fingertips_only=False):
+    cc = trajoptpy.GetCollisionChecker(env)
+    links = []
+    for lr in 'lr':
+        if not fingertips_only:
+            links.append(robot.GetLink("%s_wrist_flex_link" % (lr)))
+            links.append(robot.GetLink("%s_wrist_roll_link" % (lr)))
+            links.append(robot.GetLink("%s_gripper_palm_link" % (lr)))
+        for flr in 'lr':
+            links.append(robot.GetLink("%s_gripper_%s_finger_tip_link" % (lr, flr)))
+            if not fingertips_only:
+                links.append(robot.GetLink("%s_gripper_%s_finger_link" % (lr, flr)))
+
+    for r_link in links:
+        for kin_body in kin_bodies:
+            for link in kin_body.GetLinks():
+                if not opposite:
+                    cc.ExcludeCollisionPair(r_link, link)
+                else:
+                    cc.IncludeCollisionPair(r_link, link)
+
 def main():
     global BASE
     if (TASK["name"]==params.LIFT["name"]  or TASK["name"]==params.PULL_DOWN["name"]):
         BASE = False
 
+    if EXCLUDE_GRIPPER_COLLISIONS_FOR_ATTEMPT:
+        exclude_gripper_collisions()
+
+    gripper_before()
     s,g,traj,trajs,result, costs, idx, results = best_starting_config() #calculate attempt traj
-    pre_motion_traj = premotion(params.right_arm_attitude, s) #calculate premotion traj 
+
+    if EXCLUDE_GRIPPER_COLLISIONS_FOR_ATTEMPT:
+        exclude_gripper_collisions(opposite=True)
+
+    exclude_gripper_collisions(fingertips_only=True)
+    pre_motion_traj_smooth, pre_motion_result_smooth = \
+            premotion(params.right_arm_attitude, s, joint_vel_coeff=200)
 
     robot.SetDOFValues(params.right_arm_attitude, manip.GetArmIndices()) #set rightarm to initial resting position
     gripper_before()
-    executeArm(pre_motion_traj, params.right_arm_attitude, attempt_speed=FAST)
+    executeArm(pre_motion_traj_smooth, params.right_arm_attitude, attempt_speed=FAST)
     gripper_after()
     time.sleep(0.3)
+    orig_traj = np.copy(traj)
     traj = trim(traj)
     executeBothTimed(traj, s, attempt_speed=FAST, reset_speed=MEDIUM,both=BASE)
     #diff,sumd = difference_in_traj(traj)

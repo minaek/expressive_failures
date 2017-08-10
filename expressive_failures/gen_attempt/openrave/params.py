@@ -8,12 +8,25 @@ import os.path as osp
 OR_LOCATION = "/home/shhuang/src"
 #OR_LOCATION = "/home/viki"
 
+#For lever
+grab_lever = [-0.02492772,  0.38241802, -0.58749861, -1.86802079,  3.13089202, -1.42422262,
+ -1.02907588]
+
+
+flat_wrist3 = [-0.30000000000000004, #farther out
+ -0.20000000000000004,
+ -1.4,
+ -1.3,
+ -1.7999999999999998,
+ -0.10000004,
+ 1.8000000000000005]
+
 def get_Tgoal(dofs):
     robot.SetDOFValues(dofs, manip.GetArmIndices())
     Tgoal = manip.GetEndEffectorTransform()
     return Tgoal
 
-LIFT = { "name": "lift",
+LIFT_OLD = { "name": "lift_old",
         "vector": +0.2, "axis": 2, #vector specifies direction (+/-) and magnitude (numeric value)
         "target": [osp.join(OR_LOCATION,'openrave/src/data/mug1.kinbody.xml')],
         "props": [osp.join(OR_LOCATION,'openrave/src/data/table.kinbody.xml')],
@@ -36,6 +49,36 @@ LIFT = { "name": "lift",
         "props_transform": [[[ 0.   , -1.   ,  0.   ,  0.755],
                              [ 1.   ,  0.   ,  0.   ,  0.   ],
                              [ 0.   ,  0.   ,  1.   ,  0.689],
+                             [ 0.   ,  0.   ,  0.   ,  1.   ]]],
+        "default_starting_config": [-0.96312055,  0.41711733, -1.23801585, -1.70895655, -1.68348508,
+                                    -0.17654026, -3.58644925],
+        "Tgoal": None
+        }
+
+
+LIFT = { "name": "lift",
+        "vector": +0.2, "axis": 2, #vector specifies direction (+/-) and magnitude (numeric value)
+        "target": [osp.join(OR_LOCATION,'openrave/src/data/mug1.kinbody.xml')],
+        "props": [osp.join(OR_LOCATION,'openrave/src/data/table.kinbody.xml')],
+        "camera_array": np.array([[ -9.94542311e-03,   5.43414497e-01,  -8.39405607e-01,
+                                    2.32253075e+00],
+                                 [  9.99869989e-01,   1.60593593e-02,  -1.45012309e-03,
+                                    3.47638549e-03],
+                                 [  1.26922983e-02,  -8.39310897e-01,  -5.43503564e-01,
+                                    1.97211254e+00],
+                                 [  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+                                    1.00000000e+00]]),
+        "target_transform": [[[  3.88578059e-16,  -2.22044605e-16,   1.00000000e+00,
+                                6.70000000e-01],
+                             [  1.00000000e+00,  -5.55111512e-17,  -3.88578059e-16,
+                               -3.20000000e-01],
+                             [  5.55111512e-17,   1.00000000e+00,   2.22044605e-16,
+                                6.37000000e-01],
+                             [  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
+                                1.00000000e+00]]],
+        "props_transform": [[[ 0.   , -1.   ,  0.   ,  0.755],
+                             [ 1.   ,  0.   ,  0.   ,  0.   ],
+                             [ 0.   ,  0.   ,  1.   ,  0.589],
                              [ 0.   ,  0.   ,  0.   ,  1.   ]]],
         "default_starting_config": [-0.96312055,  0.41711733, -1.23801585, -1.70895655, -1.68348508,
                                     -0.17654026, -3.58644925],
@@ -164,10 +207,6 @@ narrower_and_higher = [-0.50452918, -0.05452742, -1.66842242, -1.19887867,  1.99
 # jsg_low2 = [-0.3362314 ,  0.64878883, -1.14855121, -1.2095    ,  1.3       ,
 #        -0.10000004, -0.4       ]
 
-#For lever
-grab_lever = [-0.02492772,  0.38241802, -0.58749861, -1.86802079,  3.13089202, -1.42422262,
- -1.02907588]
-
 pull_start = [-0.31004544, -0.10073148, -1.27499825, -1.81371156, -2.90582601, -1.34329859,
  -0.26729975]
 
@@ -250,15 +289,6 @@ pushing_flat_wrist2 = [-0.5,
  -1.7999999999999998,
  -0.10000004,
  1.8000000000000005]
-
-flat_wrist3 = [-0.30000000000000004, #farther out
- -0.20000000000000004,
- -1.4,
- -1.3,
- -1.7999999999999998,
- -0.10000004,
- 1.8000000000000005]
-
 
 pulling_cabinet_arm = [-0.81584669,  0.22284703, -1.7       , -1.74103285,  1.71074727,
        -0.31955907,  0.04227645]

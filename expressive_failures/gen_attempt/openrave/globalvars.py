@@ -63,11 +63,12 @@ robot.SetDOFValues(TASK["default_starting_config"], manip.GetArmIndices()) #set 
 
 viewer = env.GetViewer()
 viewer.SetCamera(TASK["camera_array"])
-
+kin_bodies = []
 
 for t in range(len(TASK["target_transform"])):
   target = env.ReadKinBodyXMLFile(TASK["target"][t])
   env.AddKinBody(target) #add target
+  kin_bodies.append(target)
   target.SetTransform(TASK["target_transform"][t])#set target transform
 
 for p in range(len(TASK["props"])): 
@@ -79,6 +80,7 @@ for p in range(len(TASK["props"])):
 if TASK == params.LIFT:
   Tgoal = manip.GetEndEffectorTransform()
   Tgoal[:3][:,3][:2] = target.GetTransform()[:3][:,3][:2]
+  Tgoal[:,3][2] = Tgoal[:,3][2] - 0.06
   TASK["Tgoal"] = Tgoal
 
 else:
