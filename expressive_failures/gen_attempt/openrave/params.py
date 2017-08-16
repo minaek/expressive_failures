@@ -5,8 +5,8 @@ Can custom define own parameters.
 import numpy as np 
 import os.path as osp
 
-OR_LOCATION = "/home/shhuang/src"
-#OR_LOCATION = "/home/viki"
+#OR_LOCATION = "/home/shhuang/src"
+OR_LOCATION = "/home/viki"
 
 #For lever
 grab_lever = [-0.02492772,  0.38241802, -0.58749861, -1.86802079,  3.13089202, -1.42422262,
@@ -90,10 +90,10 @@ PUSH = { "name": "push",
         "vector": +0.05, "axis": 0, #vector specifies direction (+/-) and magnitude (numeric value)
         "target": [osp.join(OR_LOCATION, 'openrave/src/data/door_pushing.kinbody.xml')],
         "props": [],
-        "camera_array": np.array([[ 0.5401757 , -0.2197591 ,  0.81235223, -1.81661725],
-                                   [-0.83860444, -0.22128981,  0.49776843, -2.28017688],
-                                   [ 0.07037613, -0.9501246 , -0.30382634,  2.05984497],
-                                   [ 0.        ,  0.        ,  0.        ,  1.        ]]),
+        "camera_array": np.array([[ 0.57179061, -0.20157033,  0.79525147, -1.42244172],
+                                 [-0.81682806, -0.23022764,  0.5289491 , -1.57548165],
+                                 [ 0.07646842, -0.95203185, -0.2962903 ,  1.28645706],
+                                 [ 0.        ,  0.        ,  0.        ,  1.        ]]),
         "target_transform": [[[  0.00000000e+00,   0.00000000e+00,   1.00000000e+00,
                                   7.14000000e-01],
                                [  1.00000000e+00,   0.00000000e+00,   0.00000000e+00,
