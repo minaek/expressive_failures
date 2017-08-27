@@ -29,7 +29,7 @@ COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=20)
 
 N_STEPS=20
 #FAST = 1.2
-FAST = 2.0
+FAST = 2.7
 #MEDIUM = 0.75
 MEDIUM = 0.9
 SLOW = 0.3
@@ -612,7 +612,7 @@ def main():
     time.sleep(0.3)
     orig_traj = np.copy(traj)
     traj = trim(traj)
-    executeBothTimed(traj, s, attempt_speed=SLOW, reset_speed=MEDIUM,both=BASE)
+    executeBothTimed(traj, s, attempt_speed=FAST, reset_speed=MEDIUM,both=BASE)
     #diff,sumd = difference_in_traj(traj)
 
     import IPython as ipy
@@ -627,10 +627,3 @@ if __name__ == "__main__":
 #and don't consider trajectory if either one of them is larger than the stationary trajectory cost 
 #make new params for new starting params 
 
-
-#Hello everyone! Sorry for the late updates :( 
-#Anca, we wanted to show you new videos of all the motions. 
-#Sandy (1) fixed the collisions issue so that we ignore collisions of the grippers with the 
-#object. This allowed for larger and smoother motions. 
-#(2) We played around with the timing a bit more and noticed that making the fast timing 
-#a bit faster made the motion look more expressive. 
