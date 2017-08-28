@@ -378,7 +378,7 @@ def trim(waypts):
 
 
 def executeBothTimed(waypts, starting_config, reps=3, \
-                     attempt_speed=1.0, reset_speed=0.2, both=True):
+                     attempt_speed=1.0, reset_speed=0.2, both=True, pause_btwn=0.05):
     # attempt_speed, reset_speed - in units of change in configuration space per second
 
     global robot
@@ -411,7 +411,7 @@ def executeBothTimed(waypts, starting_config, reps=3, \
                 time.sleep(t_attempt)
 
             #time.sleep(0.1)
-            time.sleep(0.05)
+            time.sleep(pause_btwn)
 
             # Reset
             for w in waypts[::-1][1:]:
@@ -428,7 +428,7 @@ def executeBothTimed(waypts, starting_config, reps=3, \
                 time.sleep(t_attempt)
 
             #time.sleep(0.1)
-            time.sleep(0.05)
+            time.sleep(pause_btwn)
 
             # Reset
             for w in waypts[::-1][1:]:
@@ -587,6 +587,17 @@ def exclude_gripper_collisions(opposite=False, fingertips_only=False):
                 else:
                     cc.IncludeCollisionPair(r_link, link)
 
+def execute_full_traj(start, attempt_speed, reset_speed, base, pre_motion_traj, traj, pause_btwn=0.05):
+    robot.SetDOFValues(params.right_arm_attitude, manip.GetArmIndices()) #set rightarm to initial resting position
+    gripper_before()
+    executeArm(pre_motion_traj, params.right_arm_attitude, attempt_speed=2.0)
+    gripper_after()
+    time.sleep(0.3)
+    orig_traj = np.copy(traj)
+    traj = trim(traj)
+    executeBothTimed(traj, start, attempt_speed=attempt_speed, reset_speed=reset_speed,both=base, pause_btwn=pause_btwn)
+    #diff,sumd = difference_in_traj(traj)
+
 def main():
     global BASE
     if (TASK["name"]==params.LIFT["name"]  or TASK["name"]==params.PULL_DOWN["name"]):
@@ -605,15 +616,7 @@ def main():
     pre_motion_traj_smooth, pre_motion_result_smooth = \
             premotion(params.right_arm_attitude, s, joint_vel_coeff=200)
 
-    robot.SetDOFValues(params.right_arm_attitude, manip.GetArmIndices()) #set rightarm to initial resting position
-    gripper_before()
-    executeArm(pre_motion_traj_smooth, params.right_arm_attitude, attempt_speed=FAST)
-    gripper_after()
-    time.sleep(0.3)
-    orig_traj = np.copy(traj)
-    traj = trim(traj)
-    executeBothTimed(traj, s, attempt_speed=FAST, reset_speed=MEDIUM,both=BASE)
-    #diff,sumd = difference_in_traj(traj)
+    execute_full_traj(s, FAST, MEDIUM, BASE, pre_motion_traj_smooth, traj)
 
     import IPython as ipy
     ipy.embed()
