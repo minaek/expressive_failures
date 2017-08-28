@@ -587,16 +587,17 @@ def exclude_gripper_collisions(opposite=False, fingertips_only=False):
                 else:
                     cc.IncludeCollisionPair(r_link, link)
 
-def execute_full_traj(start, attempt_speed, reset_speed, base, pre_motion_traj, traj, pause_btwn=0.05):
+def execute_full_traj(start, attempt_speed, reset_speed, base, pre_motion_traj, traj, pause_btwn=0.05, only_premotion=False):
     robot.SetDOFValues(params.right_arm_attitude, manip.GetArmIndices()) #set rightarm to initial resting position
     gripper_before()
     executeArm(pre_motion_traj, params.right_arm_attitude, attempt_speed=2.0)
     gripper_after()
     time.sleep(0.3)
-    orig_traj = np.copy(traj)
-    traj = trim(traj)
-    executeBothTimed(traj, start, attempt_speed=attempt_speed, reset_speed=reset_speed,both=base, pause_btwn=pause_btwn)
-    #diff,sumd = difference_in_traj(traj)
+    if not only_premotion:
+        orig_traj = np.copy(traj)
+        traj = trim(traj)
+        executeBothTimed(traj, start, attempt_speed=attempt_speed, reset_speed=reset_speed,both=base, pause_btwn=pause_btwn)
+        #diff,sumd = difference_in_traj(traj)
 
 def main():
     global BASE
