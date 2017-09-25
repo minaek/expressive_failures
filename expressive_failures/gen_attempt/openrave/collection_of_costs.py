@@ -88,7 +88,14 @@ def get_deltas(waypt, link_names, starting_config, goal_config):
 """
 Cost Function 2
 """
-def l1_distance(waypt, starting_config, goal_config):
+def cost_l2_distance(waypt, starting_config, goal_config, coeff=1):
+    """
+    """
+    feature = features_l2_distance(waypt, starting_config, goal_config) #elbow
+
+    return feature*coeff
+
+def features_l2_distance(waypt, starting_config, goal_config):
     global robot, manip
     armids = list(manip.GetArmIndices()) #get arm indices
     link_name = 'r_elbow_flex_link'
@@ -111,36 +118,100 @@ def l1_distance(waypt, starting_config, goal_config):
 """
 Cost Function 3
 """
-def alignment(waypt, starting_config, goal_config):
+def cost_alignment(waypt, starting_config, goal_config, coeff=1):
+    """
+    """
+    feature = features_alignment(waypt, starting_config, goal_config) 
+
+    return feature*coeff
+
+def features_alignment(waypt, starting_config, goal_config):
 	global robot, manip
-    armids = list(manip.GetArmIndices()) #get arm indices
-    link_name = 'r_shoulder_lift_link'
-    links = robot.GetLinks()
-    link_idx = links.index(robot.GetLink(link_name))
+	armids = list(manip.GetArmIndices()) #get arm indices
+	link_name = 'r_shoulder_lift_link'
+	links = robot.GetLinks()
+	link_idx = links.index(robot.GetLink(link_name))
 
-    #current EE, L
-    robot.SetDOFValues(waypt, armids)
-    EEq = manip.GetEndEffectorTransform()[:3][:,3] #get EE q
-    linkstrans = robot.GetLinkTransformations()
-    Lq = linkstrans[link_idx][:3][:,3] #get xyz of specific link
+	#current EE, L
+	robot.SetDOFValues(waypt, armids)
+	EEq = manip.GetEndEffectorTransform()[:3][:,3] #get EE q
+	linkstrans = robot.GetLinkTransformations()
+	Lq = linkstrans[link_idx][:3][:,3] #get xyz of specific link
 
-    #desired L
-    robot.SetDOFValues(goal_config, armids)
-    EEd = manip.GetEndEffectorTransform()[:3][:,3]
-    linkstrans_d = robot.GetLinkTransformations()
-    Ld = linkstrans[link_idx][:3][:,3]
+	#desired L
+	robot.SetDOFValues(goal_config, armids)
+	EEd = manip.GetEndEffectorTransform()[:3][:,3]
+	linkstrans_d = robot.GetLinkTransformations()
+	Ld = linkstrans[link_idx][:3][:,3]
 
-    deltaQ = EEq - Lq
-    deltaD = EEd - Ld
+	deltaQ = EEq - Lq
+	deltaD = EEd - Ld
 
-    return np.dot(deltaQ, deltaD)
+	return np.dot(deltaQ, deltaD)
 
 """
 Cost Function 4
 """
-def similarity_in_cspace(waypt, starting_config, goal_config):
+def cost_similarity_in_cspace(waypt, starting_config, goal_config, coeff=1):
+    """
+    """
+    feature = features_similarity_in_cspace(waypt, starting_config, goal_config) #elbow
+
+    return feature*coeff
+
+def features_similarity_in_cspace(waypt, starting_config, goal_config):
 	global robot, manip
 	q = waypt
 	qd = goal_config
 	delta = q-qd
 	return 0.1-np.dot(q,qd)
+
+
+"""
+Base
+"""
+def base(waypt, starting_config, goal_config, d=3,coeff=1):
+    armids = list(manip.GetArmIndices()) #get arm indices
+    trans = robot.GetTransform()
+    curr_xy = waypt[-2:]
+    trans[:3][:,3][:2] = curr_xy
+    robot.SetTransform(trans)
+    links = robot.GetLinks()
+    #link_idx = links.index(robot.GetLink('base_laser_link'))
+    link_idx = links.index(robot.GetLink("torso_lift_motor_screw_link"))
+    #link_idx = links.index(robot.GetLink("r_shoulder_lift_link"))
+
+    linkstrans = robot.GetLinkTransformations()
+    Bcurr = linkstrans[link_idx][:3][:,3][:2] #get xy of specific link
+
+    # Set robot to starting base position of [0,0]
+    trans[:,3][:2] = [0,0]
+    robot.SetTransform(trans)
+
+    linkstrans = robot.GetLinkTransformations()
+    Bstart = linkstrans[link_idx][:,3][:2] #get xy of specific link
+
+    #ideal
+    robot.SetDOFValues(goal_config,armids) #set dof value to ideal config
+    EEdesired = manip.GetEndEffectorTransform()[:3][:,3][:2] #get EE qd    
+ 
+    #start
+    robot.SetDOFValues(starting_config,armids) #set dof valuue to starting config
+    EEstart = manip.GetEndEffectorTransform()[:3][:,3][:2]
+
+    Bdes = (EEdesired-EEstart)
+    Bdelta = (Bcurr-Bstart)
+
+    norm_ideal_base = np.linalg.norm(Bdes)
+    norm_curr_base = np.linalg.norm(Bdelta)
+    if norm_curr_base < 1e-10:
+        proj = 0
+    else:
+        init_projection = np.dot(Bdes, Bdelta)/norm_ideal_base
+        cos_theta = np.dot(Bdes, Bdelta)/(norm_curr_base*norm_ideal_base)
+        proj = (init_projection*(cos_theta**(d-1)))
+
+    scalar = .2-proj
+    #print proj
+    #print scalar 
+    return scalar*coeff #this works better than the projection
