@@ -104,7 +104,7 @@ def l1_distance(waypt, starting_config, goal_config):
     robot.SetDOFValues(goal_config, armids)
     linkstrans_d = robot.GetLinkTransformations()
     ELd = linkstrans_d[link_idx][:3][:,3]
-    l1norm = np.linalg.norm((ELq-ELd), ord=1)
+    l1norm = np.linalg.norm(ELq-ELd) #l2 norm
 
     return 0.1 - l1norm
 
@@ -126,10 +126,21 @@ def alignment(waypt, starting_config, goal_config):
 
     #desired L
     robot.SetDOFValues(goal_config, armids)
+    EEd = manip.GetEndEffectorTransform()[:3][:,3]
     linkstrans_d = robot.GetLinkTransformations()
     Ld = linkstrans[link_idx][:3][:,3]
 
     deltaQ = EEq - Lq
-    deltaD = EEq - Ld
+    deltaD = EEd - Ld
 
     return np.dot(deltaQ, deltaD)
+
+"""
+Cost Function 4
+"""
+def similarity_in_cspace(waypt, starting_config, goal_config):
+	global robot, manip
+	q = waypt
+	qd = goal_config
+	delta = q-qd
+	return 0.1-np.dot(q,qd)
