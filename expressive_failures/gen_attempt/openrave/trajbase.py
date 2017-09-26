@@ -16,21 +16,19 @@ from openravepy import *
 from lfd.util import util
 import time
 from math import *
-import cost
-from cost import *
+from collection_of_costs import *
 from pyquaternion import Quaternion
 import globalvars
 from lfd.environment import sim_util
 
 
-COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, d=3, coeff=20)
+LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link']
+COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, LINK_NAMES, d=3, coeff=20)
 #COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
-COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=20)
+#COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=20)
 
 N_STEPS=20
-#FAST = 1.2
 FAST = 2.7
-#MEDIUM = 0.75
 MEDIUM = 0.9
 SLOW = 0.3
 
@@ -43,39 +41,28 @@ def best_starting_config():
 
     returns starting configuration, goal configuration, and trajectory
     """
-    global sols,starting_configs,goal_config_stationary,Tgoal
+    global starting_configs,goal_config_stationary,Tgoal
     trajs = [] #list of lists
     costs = [] #list of lists
     results = [] #contains result from solving TrajOpt problems
-    print "len of sols: " + str(len(sols))
-    for s in range(len(sols)):
-        print s
-        candidate_attempt_traj, result = position_base_request(starting_configs[s],goal_config_stationary)
-        trajs.append(candidate_attempt_traj) #append trajectory for a given ik solution
+    print "# possible starting configs: " + str(len(starting_configs))
+    for i,start_config in enumerate(starting_configs):
+        print i
+        candidate_attempt_traj, result = position_base_request(start_config,goal_config_stationary)
+        trajs.append(candidate_attempt_traj) #append trajectory for a given ik solution for q_s
         results.append(result)
-        waypt_costs = [] 
-        for waypt in candidate_attempt_traj:  
-            total_cost = (COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary) + \
-            COST_FN_BASE(waypt, starting_configs[s], goal_config_stationary) if BASE
-            else COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary))
-            waypt_costs.append(total_cost)
-            #waypt_costs.append(COST_FN_XSG(waypt, starting_configs[s], goal_config_stationary))
-            #waypt_costs.append(COST_FN_BASE(waypt, starting_configs[s], goal_config_stationary))
-
+        # total cost from COST_FN_XSG and COST_FN_BASE
+        cost = np.sum([val for x,val in result.GetCosts() if x=="f"])
         # check to see whether collision costs are zero
         coll_cost = np.sum([y for x,y in result.GetCosts() if x.startswith("collision")])
         if coll_cost > 1e-3:
-            waypt_costs.append(1000)
+            cost += 10000
+        costs.append(cost) #appending list of costs
 
-        costs.append(waypt_costs) #appending list of costs
-
-    idx = np.argmin([sum(x) for x in costs]) #find the trajectory with the lowest cost sum
+    idx = np.argmin(costs) #find the trajectory with the lowest cost sum
     traj = trajs[idx]
-    starting_config = starting_configs[idx]
-
-    #print [r.GetCosts()[-2][1] - costs[i][-2] for i,r in enumerate(results)]   # this compares the elbow cost
-    #print [r.GetCosts()[-1][1] - costs[i][-1] for i,r in enumerate(results)]  # this compares the base cost
-    return starting_config, goal_config_stationary, traj, trajs, result, costs, idx, results
+    best_start_config = starting_configs[idx]
+    return best_start_config, goal_config_stationary, traj, trajs, result, costs, idx, results
 
 # def calculate_EE_movement(traj):
 #     deviation=0
@@ -213,13 +200,15 @@ def optimize_starting_and_cost():
 
 
 def position_base_request(starting_config, goal_config, init_position=[0,0]):
+    # init_position - initial position of robot's base
     global robot
-    n_steps = N_STEPS #seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
+    #seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
+    n_steps = N_STEPS
     T = robot.GetTransform()
     T[:,3][:2] = init_position
     robot.SetTransform(T)
-    robot.SetDOFValues(starting_config, manip.GetArmIndices())
     armids = list(manip.GetArmIndices()) #get arm indices
+    robot.SetDOFValues(starting_config, armids)
     links = robot.GetLinks()
     link_idx = links.index(robot.GetLink('r_gripper_palm_link'))
     linkstrans = robot.GetLinkTransformations()
@@ -231,8 +220,6 @@ def position_base_request(starting_config, goal_config, init_position=[0,0]):
     request = {
         "basic_info" : {
             "n_steps" : n_steps,
-            #"manip" : "active",
-            #'manip': 'rightarm',
             "start_fixed" : True  # DOF values at first timestep are fixed based on current robot state
         },
 
@@ -249,21 +236,8 @@ def position_base_request(starting_config, goal_config, init_position=[0,0]):
                 }   
         },
         ],
-        "constraints" : [
-        #{
-            #"type" : "pose",
-            #"name" : "final_pose",
-            #"params" : {
-            #    "pos_coeffs" : [6,6,6],
-            #    "rot_coeffs" : [2,2,2],
-            #    "xyz" : list(xyz_target),
-            #    "wxyz" : list(quat_target),
-            #    "link" : "r_gripper_palm_link",
-            #},
-        #}
-        ],
-        "init_info" : {
-        }
+        "constraints" : [],
+        "init_info" : {}
     }
 
     ##Initialize trajectory as stationary##:
@@ -287,14 +261,17 @@ def position_base_request(starting_config, goal_config, init_position=[0,0]):
     prob = trajoptpy.ConstructProblem(s, env)
 
     cost_fn = lambda x: COST_FN_XSG(x, starting_config, goal_config_stationary)
-    cost_fn2  = lambda x: COST_FN_BASE(x, starting_config, goal_config_stationary)
+    #cost_fn2  = lambda x: COST_FN_BASE(x, starting_config, goal_config_stationary)
     #for n in range(n_steps):
     #    prob.AddCost(cost_fn2, [(n,j) for j in range(7)], "base%i"%(n))
     with openravepy.RobotStateSaver(robot):
       with util.suppress_stdout():
-        prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(7)], "table%i"%(n_steps-1))
+        n_dof = 7
         if BASE:
-            prob.AddCost(cost_fn2, [(n_steps-1,j) for j in range(7,9)], "base%i"%(n_steps-1))
+            n_dof = 9
+        prob.AddCost(cost_fn, [(n_steps-1,j) for j in range(n_dof)], "express%i"%(n_steps-1))
+        #if BASE:
+        #    prob.AddCost(cost_fn2, [(n_steps-1,j) for j in range(7,9)], "base%i"%(n_steps-1))
         result = trajoptpy.OptimizeProblem(prob)
     traj = result.GetTraj()
     dof_inds = sim_util.dof_inds_from_name(robot, manip_name)

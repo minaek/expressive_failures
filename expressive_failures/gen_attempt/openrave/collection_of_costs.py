@@ -10,30 +10,21 @@ import scipy.spatial.distance
 Cost Function 1
 """
 
-def cost_projections(waypt, starting_config, goal_config, d=7, coeff=1):
+def cost_projections(waypt, starting_config, goal_config, link_names, d=7, coeff=1):
     """
     The the second cost function we came up with that projects EL onto EE d times
     """
-    feature = features_projections(waypt, starting_config, goal_config, d) #elbow+shoulder
-    #feature = features_projection(waypt, starting_config, goal_config, d) #elbow
-
+    feature = features_projections(waypt, starting_config, goal_config, link_names, d)
     return feature*coeff
 
-def features_projections(waypt, starting_config, goal_config, d):
+def features_projections(waypt, starting_config, goal_config, link_names, d):
     """
     The the second cost function we came up with that projects EL onto EE d times
     """
-    link_name = 'r_elbow_flex_link'
-    link_names = ['r_elbow_flex_link', 'r_shoulder_lift_link']
     deltaEEs,deltaLs = get_deltas(waypt, link_names, starting_config, goal_config)
-    norm_deltaEEs = []
-    norm_deltaLs = []
+    norm_deltaEEs = [np.linalg.norm(deltaEE) for deltaEE in deltaEEs]
+    norm_deltaLs = [np.linalg.norm(deltaL) for deltaL in deltaLs]
     projections = []
-    for l in range(len(link_names)):
-        norm_deltaEE = np.linalg.norm(deltaEEs[l])
-        norm_deltaEEs.append(norm_deltaEE)
-        norm_deltaL = np.linalg.norm(deltaLs[l])
-        norm_deltaLs.append(norm_deltaL)
 
     for l in range(len(link_names)):
         if norm_deltaLs[l] < 1e-10:
@@ -44,7 +35,8 @@ def features_projections(waypt, starting_config, goal_config, d):
             proj = (init_projection*(cos_theta**(d-1)))
         projections.append(proj)
 
-    return 0.1 - sum(projections)
+    #return 0.3 - sum(projections)
+    return -sum(projections)
 
 def get_deltas(waypt, link_names, starting_config, goal_config):
     """
@@ -54,33 +46,50 @@ def get_deltas(waypt, link_names, starting_config, goal_config):
     global robot, manip
     armids = list(manip.GetArmIndices()) #get arm indices
     links = robot.GetLinks()
+
+    assert len(waypt) == len(armids) or len(waypt) == len(armids)+2
+    include_base = len(waypt) > len(armids)
+
     deltaEEs=[]
     deltaLs = []
+    waypt_arm = waypt[:len(armids)]
+    if include_base:
+        trans = robot.GetTransform()
+        waypt_basexy = waypt[len(armids):]
+
     for link_name in link_names:
         link_idx = links.index(robot.GetLink(link_name))
+        n_coord = 3
+        if link_name == "torso_lift_motor_screw_link":
+            # Only consider xy, not xyz
+            print "only considering xy"
+            n_coord = 2
 
-        #current
-        robot.SetDOFValues(waypt,armids) # set dof values to current config
-        EEcurr = manip.GetEndEffectorTransform()[:3][:,3] #get EE q
+        #current (q)
+        if include_base:
+            trans[:2,3] = waypt_basexy
+            robot.SetTransform(trans)
+        robot.SetDOFValues(waypt_arm,armids) # set dof values to current config
         linkstrans = robot.GetLinkTransformations()
-        Lcurr = linkstrans[link_idx][:3][:,3] #get xyz of specific link
+        Lcurr = linkstrans[link_idx][:n_coord,3] #get xyz of specific link
 
-        #ideal
+        #set robot to starting base position of [0,0]
+        if include_base:
+            trans[:2,3] = [0,0]
+            robot.SetTransform(trans)
+
+        #ideal (q_d)
         robot.SetDOFValues(goal_config,armids) #set dof valuue to ideal config
-        EEdesired = manip.GetEndEffectorTransform()[:3][:,3] #get EE qd    
-        linkstrans_d = robot.GetLinkTransformations()
-        Ldesired = linkstrans_d[link_idx][:3][:,3]
+        EEdesired = manip.GetEndEffectorTransform()[:n_coord,3] #get EE qd    
         
-        #start
+        #start (q_s)
         robot.SetDOFValues(starting_config,armids) #set dof valuue to starting config
         linkstrans_s = robot.GetLinkTransformations()
-        Lstart = linkstrans_s[link_idx][:3][:,3]
-        EEstart = manip.GetEndEffectorTransform()[:3][:,3]
+        Lstart = linkstrans_s[link_idx][:n_coord,3]
+        EEstart = manip.GetEndEffectorTransform()[:n_coord,3]
 
-        deltaEE = (EEdesired-EEstart)
-        deltaEEs.append(deltaEE)
-        deltaL = (Lcurr-Lstart)
-        deltaLs.append(deltaL)
+        deltaEEs.append(EEdesired - EEstart)
+        deltaLs.append(Lcurr - Lstart)
 
     return deltaEEs, deltaLs
 
