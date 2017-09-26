@@ -22,7 +22,8 @@ import globalvars
 from lfd.environment import sim_util
 
 
-LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link']
+#LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link']
+LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link', 'torso_lift_motor_screw_link']
 COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, LINK_NAMES, d=3, coeff=20)
 #COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
 #COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=20)

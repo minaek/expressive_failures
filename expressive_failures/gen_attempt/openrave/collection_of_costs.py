@@ -36,6 +36,7 @@ def features_projections(waypt, starting_config, goal_config, link_names, d):
         projections.append(proj)
 
     return 0.3 - sum(projections)
+    #return 0.1 - sum(projections)
     #return -sum(projections)
 
 def get_deltas(waypt, link_names, starting_config, goal_config):
@@ -55,18 +56,21 @@ def get_deltas(waypt, link_names, starting_config, goal_config):
     waypt_arm = waypt[:len(armids)]
     if include_base:
         trans = robot.GetTransform()
+        orig_trans = np.array(trans)
         waypt_basexy = waypt[len(armids):]
+    orig_config = robot.GetDOFValues(armids)
 
     for link_name in link_names:
         link_idx = links.index(robot.GetLink(link_name))
         n_coord = 3
         if link_name == "torso_lift_motor_screw_link":
             # Only consider xy, not xyz
-            print "only considering xy"
             n_coord = 2
 
         #current (q)
+        # PREVIOUS VERSION: Include "and n_coord == 2" in line below
         if include_base:
+        #if include_base and n_coord == 2:
             trans[:2,3] = waypt_basexy
             robot.SetTransform(trans)
         robot.SetDOFValues(waypt_arm,armids) # set dof values to current config
@@ -74,7 +78,9 @@ def get_deltas(waypt, link_names, starting_config, goal_config):
         Lcurr = linkstrans[link_idx][:n_coord,3] #get xyz of specific link
 
         #set robot to starting base position of [0,0]
+        # PREVIOUS VERSION: Include "and n_coord == 2" in line below
         if include_base:
+        #if include_base and n_coord == 2:
             trans[:2,3] = [0,0]
             robot.SetTransform(trans)
 
@@ -90,6 +96,10 @@ def get_deltas(waypt, link_names, starting_config, goal_config):
 
         deltaEEs.append(EEdesired - EEstart)
         deltaLs.append(Lcurr - Lstart)
+
+    # Reset robot to original position
+    robot.SetTransform(orig_trans)
+    robot.SetDOFValues(orig_config, armids)
 
     return deltaEEs, deltaLs
 
