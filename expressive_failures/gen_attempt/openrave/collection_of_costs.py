@@ -35,8 +35,8 @@ def features_projections(waypt, starting_config, goal_config, link_names, d):
             proj = (init_projection*(cos_theta**(d-1)))
         projections.append(proj)
 
-    #return 0.3 - sum(projections)
-    return -sum(projections)
+    return 0.3 - sum(projections)
+    #return -sum(projections)
 
 def get_deltas(waypt, link_names, starting_config, goal_config):
     """
