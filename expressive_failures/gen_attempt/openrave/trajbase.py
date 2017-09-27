@@ -24,7 +24,9 @@ from lfd.environment import sim_util
 
 #LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link']
 LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link', 'torso_lift_motor_screw_link']
-COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, LINK_NAMES, d=3, coeff=20)
+#COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, LINK_NAMES, d=3, coeff=20)
+COST_FN_XSG = lambda x,s,g: cost_projections(x, s, g, LINK_NAMES, d=3, coeff=20, alpha=0.3)
+
 #COST_FN_XSG = lambda x,s,g: cost_distance_bet_deltas(x, s, g, coeff=20)
 #COST_FN_BASE = lambda x, s, g: base(x,s,g,d=3, coeff=20)
 
@@ -54,6 +56,12 @@ def best_starting_config():
         results.append(result)
         # total cost from COST_FN_XSG and COST_FN_BASE
         cost = np.sum([val for x,val in result.GetCosts() if x=="f"])
+
+        # check to see whether pose constraints were violated at any timestep
+        pose_violation = np.max([val for name,val in result.GetConstraints() if "pose" in name])
+        if pose_violation > 1e-3:
+            cost += 1000
+        
         # check to see whether collision costs are zero
         coll_cost = np.sum([y for x,y in result.GetCosts() if x.startswith("collision")])
         if coll_cost > 1e-3:
@@ -232,7 +240,7 @@ def position_base_request(starting_config, goal_config, init_position=[0,0]):
         {
             "type" : "collision",
             "params" : {
-                "coeffs" : [10], # penalty coefficients. list of length one is automatically expanded to a list of length n_timesteps
+                "coeffs" : [1], # penalty coefficients. list of length one is automatically expanded to a list of length n_timesteps
               "dist_pen" : [0.025] # robot-obstacle distance that penalty kicks in. expands to length n_timesteps
                 }   
         },
@@ -250,8 +258,8 @@ def position_base_request(starting_config, goal_config, init_position=[0,0]):
             "type" : "pose",
             "name" : "pose"+str(i),
             "params" : {
-                "pos_coeffs" : [6,6,6],
-                "rot_coeffs" : [2,2,2],
+                "pos_coeffs" : [6,6,6], #[6,6,6],
+                "rot_coeffs" : [2,2,2], #[2,2,2],
                 "xyz" : list(xyz_target),
                 "wxyz" : list(quat_target),
                 "link" : "r_gripper_palm_link",

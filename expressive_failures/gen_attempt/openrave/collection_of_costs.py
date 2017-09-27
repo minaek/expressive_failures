@@ -10,14 +10,14 @@ import scipy.spatial.distance
 Cost Function 1
 """
 
-def cost_projections(waypt, starting_config, goal_config, link_names, d=7, coeff=1):
+def cost_projections(waypt, starting_config, goal_config, link_names, d=7, coeff=1, alpha=0.3):
     """
     The the second cost function we came up with that projects EL onto EE d times
     """
-    feature = features_projections(waypt, starting_config, goal_config, link_names, d)
+    feature = features_projections(waypt, starting_config, goal_config, link_names, d, alpha)
     return feature*coeff
 
-def features_projections(waypt, starting_config, goal_config, link_names, d):
+def features_projections(waypt, starting_config, goal_config, link_names, d, alpha):
     """
     The the second cost function we came up with that projects EL onto EE d times
     """
@@ -35,9 +35,7 @@ def features_projections(waypt, starting_config, goal_config, link_names, d):
             proj = (init_projection*(cos_theta**(d-1)))
         projections.append(proj)
 
-    return 0.3 - sum(projections)
-    #return 0.1 - sum(projections)
-    #return -sum(projections)
+    return alpha - sum(projections)
 
 def get_deltas(waypt, link_names, starting_config, goal_config):
     """
@@ -98,7 +96,8 @@ def get_deltas(waypt, link_names, starting_config, goal_config):
         deltaLs.append(Lcurr - Lstart)
 
     # Reset robot to original position
-    robot.SetTransform(orig_trans)
+    if include_base:
+        robot.SetTransform(orig_trans)
     robot.SetDOFValues(orig_config, armids)
 
     return deltaEEs, deltaLs
