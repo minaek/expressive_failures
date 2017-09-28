@@ -4,6 +4,9 @@ import h5py
 import itertools
 import numpy as np
 import openravepy
+import os, os.path as osp
+import sys
+import time
 
 from shared_costs import cost_phi_ee, cost_phi_bodypts, cost_config
 from shared_dists import dist_l2, dist_proj
@@ -12,6 +15,7 @@ from shared_util import exclude_gripper_collisions, position_base_request, execu
 import params
 
 N_STEPS = 20
+MAX_ATTEMPTS = 5
 
 # Options for distance fcn, cost fcn, and cost fcn parameters
 DIST_FNS = [("dist_proj_k1", lambda v1,v2: dist_proj(v1,v2,k=1)),
@@ -34,10 +38,18 @@ ALPHAS = [0,0.3,1.0]
 LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link', 'torso_lift_motor_screw_link']
 
 # Tasks to compute expressive failure trajectories for
-TASKS = [params.PUSH, params.LIFT]
-#TASKS = [params.PUSH_SIDEWAYS, params.PULL, params.PULL_DOWN, params.PUSH, params.LIFT]
+#TASKS = [params.PUSH, params.LIFT]
+TASKS = [params.PUSH_SIDEWAYS, params.PULL, params.PULL_DOWN, params.PUSH, params.LIFT]
 
 EXCLUDE_GRIPPER_COLLISIONS_FOR_ATTEMPT = True
+
+CURRDIR = os.path.dirname(__file__)
+LOGFILE = osp.join(CURRDIR, "log.txt")
+
+def writelog(message):
+    with open(LOGFILE,'a') as f:
+        f.write("{0} {1}\n".format(time.asctime( time.localtime(time.time())),
+                                   message))
 
 def get_time_stamp():
     import datetime
@@ -85,61 +97,111 @@ def standardize_cost(cost, cost_params):
 
 def compute_expressive_failure(shared, cost_name, cost_fn, dist_name, dist_fn, link_names, cost_params, output_h5):
     costs = []
-    for cost_p in cost_params:
-        print "Cost params:", cost_p
+    for i, cost_p in enumerate(cost_params):
+        # Check if this has already been computed
+        computed = False
+        f = h5py.File(output_h5, 'r')
+        if shared.task["name"] in f and \
+           cost_name in f[shared.task["name"]] and \
+           dist_name in f[shared.task["name"]][cost_name] and \
+           str(i) in f[shared.task["name"]][cost_name][dist_name]["all"]:
+             if "cost" in f[shared.task["name"]][cost_name][dist_name]["all"][str(i)]:
+                 computed = True
+             elif f[shared.task["name"]][cost_name][dist_name]["all"][str(i)]["n_attempts"][()] > MAX_ATTEMPTS:
+                 computed = True
+        f.close()
+        if computed:
+            continue
+        print "Cost params:", i, cost_p
+        writelog(shared.task["name"] + " | " + cost_name + " | " + dist_name + \
+                 " | " + str(i) + " " + str(cost_p))
+
+        # Update output file
+        f = h5py.File(output_h5, 'r+')
+        if shared.task["name"] not in f:
+            f.create_group(shared.task["name"])
+            f[shared.task["name"]]["task_vector"] = shared.task["vector"]
+        if cost_name not in f[shared.task["name"]]:
+            f[shared.task["name"]].create_group(cost_name)
+        if dist_name not in f[shared.task["name"]][cost_name]:
+            g = f[shared.task["name"]][cost_name].create_group(dist_name)
+            g.create_group("all")
+        if str(i) not in f[shared.task["name"]][cost_name][dist_name]["all"]:
+            f[shared.task["name"]][cost_name][dist_name]["all"].create_group(str(i))
+        g = f[shared.task["name"]][cost_name][dist_name]["all"][str(i)]
+        n_attempts = 1
+        if "n_attempts" in g:
+            n_attempts += g["n_attempts"][()]
+            del g["n_attempts"]
+        g["n_attempts"] = n_attempts
+        f.close()
+        if n_attempts > MAX_ATTEMPTS:  # Crashed too many times
+            writelog("\tSkipping after " + str(MAX_ATTEMPTS) + " crashes")
+            continue
+
         cost_fn_xsg = lambda x,s,g: cost_fn(shared, x, s, g, link_names, dist_fn, **cost_p)
         start_config, traj, cost = best_starting_config(shared, cost_fn_xsg)
         cost = standardize_cost(cost, cost_p)
         costs.append((cost, cost_p, start_config, traj))
 
-    # Save output
-    f = h5py.File(output_h5, 'r+')
-    if shared.task["name"] not in f:
-        f.create_group(shared.task["name"])
-    f[shared.task["name"]]["task_vector"] = shared.task["vector"]
-    g = f[shared.task["name"]].create_group(cost_name)
-    g = f[shared.task["name"]][cost_name].create_group(dist_name)
-    g.create_group("all")
-    for i, (cost, cost_p, start_config, traj) in enumerate(costs):
-        g["all"].create_group(str(i))
-        g["all"][str(i)]["cost"] = cost
-        g["all"][str(i)].create_group("cost_params")
+        # Save output
+        f = h5py.File(output_h5, 'r+')
+        g = f[shared.task["name"]][cost_name][dist_name]["all"][str(i)]
+        g["cost"] = cost
+        g.create_group("cost_params")
         for k,v in cost_p.items():
-            g["all"][str(i)]["cost_params"][k] = v
-        g["all"][str(i)]["cost_params"]["link_names"] = LINK_NAMES
-        g["all"][str(i)]["start_config"] = start_config
-        g["all"][str(i)]["traj"] = traj
+            g["cost_params"][k] = v
+        g["cost_params"]["link_names"] = LINK_NAMES
+        g["start_config"] = start_config
+        g["traj"] = traj
+        f.close()
 
-    idx = np.argmin([cost for cost, cost_p, start_config, traj in costs])
-    g.create_group("best")
-    g["best"]["idx"] = idx
-    g["best"]["cost"] = costs[idx][0]
-    g["best"].create_group("cost_params")
-    for k, v in costs[idx][1].items():
-        g["best"]["cost_params"][k] = v
-    g["best"]["cost_params"]["link_names"] = LINK_NAMES
-    g["best"]["start_config"] = start_config
-    g["best"]["traj"] = traj
-    f.close()
+    #idx = np.argmin([cost for cost, cost_p, start_config, traj in costs])
+    #g.create_group("best")
+    #g["best"]["idx"] = idx
+    #g["best"]["cost"] = costs[idx][0]
+    #g["best"].create_group("cost_params")
+    #for k, v in costs[idx][1].items():
+    #    g["best"]["cost_params"][k] = v
+    #g["best"]["cost_params"]["link_names"] = LINK_NAMES
+    #g["best"]["start_config"] = start_config
+    #g["best"]["traj"] = traj
+    #f.close()
 
 def main():
-    h5_fname = "output_" + get_time_stamp() + ".h5"
-    f = h5py.File(h5_fname, 'w')
-    f.close()
+    #h5_fname = "output_" + get_time_stamp() + ".h5"
+    #f = h5py.File(h5_fname, 'w')
+    #f.close()
+
+    h5_fname = "output_20170927_220543_411510.h5"
+    task_name = sys.argv[1]
+
+    task = None
+    for t in TASKS:
+        if t["name"] == task_name:
+            task = t
+            break
+    assert task is not None
     cost_params = list(itertools.product(COST_COEFFS, ALPHAS))
     cost_params = [dict(coeff=coeff, alpha=alpha) for coeff, alpha in cost_params]
-    for task in TASKS:
-        print "Task:", task["name"]
-        shared = SharedVars(task, env, robot)
 
-        if EXCLUDE_GRIPPER_COLLISIONS_FOR_ATTEMPT:
-            exclude_gripper_collisions(shared)
+    print "Task:", task["name"]
+    shared = SharedVars(task, env, robot)
 
-        for cost_name, cost_fn in COST_FNS:
-            print "cost fcn:", cost_name
-            for dist_name, dist_fn in DIST_FNS:
-                print "dist_name:", dist_name
-                compute_expressive_failure(shared, cost_name, cost_fn, dist_name, dist_fn, LINK_NAMES, cost_params, h5_fname)
+    if EXCLUDE_GRIPPER_COLLISIONS_FOR_ATTEMPT:
+        exclude_gripper_collisions(shared)
+
+    for cost_name, cost_fn in COST_FNS:
+        print "cost fcn:", cost_name
+        for dist_name, dist_fn in DIST_FNS:
+            print "dist fcn:", dist_name
+            compute_expressive_failure(shared, cost_name, cost_fn, dist_name, dist_fn, LINK_NAMES, cost_params, h5_fname)
+
+    f = h5py.File(h5_fname, 'r+')
+    if "done" not in f:
+        f.create_group("done")
+    f["done"][task["name"]] = 1
+    f.close()
 
 if __name__ == "__main__":
     env = openravepy.Environment()
