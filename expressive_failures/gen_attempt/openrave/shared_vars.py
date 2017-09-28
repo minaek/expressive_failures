@@ -1,5 +1,7 @@
-import params
+import numpy as np
 import openravepy
+
+import params
 
 def iksolver(shared, Tgoal):
     """
@@ -68,23 +70,37 @@ class SharedVars:
         _,sols = iksolver(self, Tgoal)
         assert len(sols) > 0, "No solution found"  # No viable solutions for the starting xyz position
 
-        self.robot.SetDOFValues(sols[0], self.manip.GetArmIndices()) #set dofs to first ik solution found; doesn't matter which ik solution we use
+        # Make sure all poses for starting position ik solutions are approx equal to Tgoal's pose
+        for sol in sols:
+            self.robot.SetDOFValues(sol, self.manip.GetArmIndices())
+            trans = self.manip.GetEndEffectorTransform()
+            assert (np.abs(trans-Tgoal) < 1e-9).all()
+            self.starting_configs.append(sol)
+
+        self.robot.SetDOFValues(self.starting_configs[0], self.manip.GetArmIndices()) #set dofs to first ik solution found; doesn't matter which ik solution we use
         goal_transform = self.manip.GetEndEffectorTransform()
         axis = self.task["axis"]
         vector = self.task["vector"]
+        if np.abs(vector) == 0.05:  # TODO Remove after debugging
+            self.task["vector"] = vector*2
+            print "new vector:", self.task["vector"]
         goal_transform[:3][:,3][axis] += vector  # update goal_transform accordingly
 
-        self.goal_config_stationary,_ = iksolver(self, goal_transform) #get ik solution for goal_transform
-        assert self.goal_config_stationary is not None, "No goal solution found"
-        self.robot.SetDOFValues(self.goal_config_stationary, self.manip.GetArmIndices())
-        tr = self.manip.GetEndEffectorTransform()
-        assert (goal_transform-tr<1e-10).all() #make sure this ik solution's xyz position is approximately equal to goal_transform's xyz
-
-        for sol in sols: #make sure the xyz positions for tall the starting position ik solutions are approximately equal to Tgoal' xyz
+        _,goal_sols = iksolver(self, goal_transform) #get ik solution for goal_transform
+        assert len(goal_sols) > 0, "No goal solution found"
+        self.goal_configs = []
+        # Make sure all poses for goal ik solutions are approx equal to goal_transform's pose
+        for sol in goal_sols: 
             self.robot.SetDOFValues(sol, self.manip.GetArmIndices())
             trans = self.manip.GetEndEffectorTransform()
-            assert (trans-Tgoal < 1e-9).all()
-            self.starting_configs.append(sol)
+            assert (np.abs(trans-goal_transform)<1e-9).all()
+            self.goal_configs.append(sol)
+
+        self.start_goal_idx = []  # Closest goal config for each starting config
+        for start_config in self.starting_configs:
+            goal_config_idx = np.argmin(np.linalg.norm( \
+                                  np.array(self.goal_configs) - start_config, axis=1))
+            self.start_goal_idx.append(goal_config_idx)
 
         #open gripper
         self.robot.SetDOFValues([0],[34]) #set default gripper to closed 

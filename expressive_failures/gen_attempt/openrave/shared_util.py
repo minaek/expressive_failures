@@ -143,7 +143,7 @@ def gripper_after(shared):
         v[robot.GetJoint('r_gripper_l_finger_joint').GetDOFIndex()] = 0.1
         robot.SetDOFValues(v)             
 
-def position_base_request(shared, cost_fn_xsg, starting_config, n_steps, init_position=[0,0]):
+def position_base_request(shared, cost_fn_xsg, starting_config, goal_config, n_steps, init_position=[0,0]):
     # init_position - initial position of robot's base
     # seems like nsteps needs to be defined as 1 when the base is the only active DOF initialized
 
@@ -153,7 +153,6 @@ def position_base_request(shared, cost_fn_xsg, starting_config, n_steps, init_po
     shared.robot.SetTransform(T)
     gripper_before(shared)
 
-    goal_config = shared.goal_config_stationary
     armids = list(shared.manip.GetArmIndices()) #get arm indices
     shared.robot.SetDOFValues(starting_config, armids)
     links = shared.robot.GetLinks()
@@ -207,7 +206,7 @@ def position_base_request(shared, cost_fn_xsg, starting_config, n_steps, init_po
     s = json.dumps(request)
     prob = trajoptpy.ConstructProblem(s, shared.env)
 
-    cost_fn = lambda x: cost_fn_xsg(x, starting_config, shared.goal_config_stationary)
+    cost_fn = lambda x: cost_fn_xsg(x, starting_config, goal_config)
     with openravepy.RobotStateSaver(shared.robot):
       with util.suppress_stdout():
         n_dof = 7
