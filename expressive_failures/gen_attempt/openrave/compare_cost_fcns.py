@@ -20,21 +20,20 @@ MAX_ATTEMPTS = 5
 # Options for distance fcn, cost fcn, and cost fcn parameters
 DIST_FNS = [("dist_proj_k1", lambda v1,v2: dist_proj(v1,v2,k=1)),
             ("dist_proj_k3", lambda v1,v2: dist_proj(v1,v2,k=3)),
-            #("dist_proj_k5", lambda v1,v2: dist_proj(v1,v2,k=5)),
-            #("dist_proj_k7", lambda v1,v2: dist_proj(v1,v2,k=7)),
-            ("dist_proj_k7", lambda v1,v2: dist_proj(v1,v2,k=9)),
+            ("dist_proj_k9", lambda v1,v2: dist_proj(v1,v2,k=9)),
             ("dist_l2",      dist_l2)
            ]
 
 COST_FNS = [("cost_phi_ee", cost_phi_ee),
             ("cost_phi_bodypts", cost_phi_bodypts),
-            ("cost_config", cost_config)]
+            ("cost_config", cost_config)
+            ]
 
 #COST_COEFFS = [1,5,10,20,40,80]
 #ALPHAS = [0,0.3,0.6,1.0,2.0,4.0,8.0]
 
-COST_COEFFS = [20,200]
-ALPHAS = [0,0.3,1.0]
+COST_COEFFS = [10,20,40,80,160]
+ALPHAS = [0,0.3,0.6,1.0,2.0]
 LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link', 'torso_lift_motor_screw_link']
 
 # Tasks to compute expressive failure trajectories for
@@ -42,6 +41,7 @@ LINK_NAMES = ['r_elbow_flex_link', 'r_shoulder_lift_link', 'torso_lift_motor_scr
 TASKS = [params.PUSH_SIDEWAYS, params.PULL, params.PULL_DOWN, params.PUSH, params.LIFT]
 
 EXCLUDE_GRIPPER_COLLISIONS_FOR_ATTEMPT = True
+JOINT_VEL_MAX = 1.0
 
 CURRDIR = os.path.dirname(__file__)
 LOGFILE = osp.join(CURRDIR, "log.txt")
@@ -66,27 +66,35 @@ def best_starting_config(shared, cost_fn_xsg):
     """
     trajs = [] #list of lists
     costs = [] #list of lists
+    results = []
     for i,start_config in enumerate(shared.starting_configs):
         print "\t", i
         goal_config = shared.goal_configs[shared.start_goal_idx[i]]
         candidate_attempt_traj, result = position_base_request(shared, cost_fn_xsg, start_config, goal_config, N_STEPS)
         trajs.append(candidate_attempt_traj)  # append trajectory for a given ik solution for q_s
+        results.append(result)
         cost = np.sum([val for x,val in result.GetCosts() if x=="f"])  # total cost
+
+        # check to see whether joint velocity cost is too high
+        joint_vel_cost = [val for x,val in result.GetCosts() if x=="joint_vel"]
+        assert len(joint_vel_cost) == 1
+        if joint_vel_cost[0] > JOINT_VEL_MAX:
+            cost += 1000
 
         # check to see whether pose constraints were violated at any timestep
         pose_violation = np.max([val for name,val in result.GetConstraints() if "pose" in name])
         if pose_violation > 1e-3:
-            cost += 1000
+            cost += 10000
         
         # check to see whether collision costs are zero
         coll_cost = np.sum([y for x,y in result.GetCosts() if x.startswith("collision")])
         if coll_cost > 1e-3:
-            cost += 10000
+            cost += 100000
         costs.append(cost)
 
     idx = np.argmin(costs) #find the trajectory with the lowest cost sum
     #execute_traj(shared, shared.starting_configs[idx], trajs[idx])
-    return shared.starting_configs[idx], trajs[idx], costs[idx]
+    return idx, shared.starting_configs[idx], trajs[idx], costs[idx]
 
 def standardize_cost(cost, cost_params):
     # cost = coeff*(alpha + x)
@@ -140,9 +148,9 @@ def compute_expressive_failure(shared, cost_name, cost_fn, dist_name, dist_fn, l
             continue
 
         cost_fn_xsg = lambda x,s,g: cost_fn(shared, x, s, g, link_names, dist_fn, **cost_p)
-        start_config, traj, cost = best_starting_config(shared, cost_fn_xsg)
+        idx, start_config, traj, cost = best_starting_config(shared, cost_fn_xsg)
         cost = standardize_cost(cost, cost_p)
-        costs.append((cost, cost_p, start_config, traj))
+        costs.append((idx, cost, cost_p, start_config, traj))
 
         # Save output
         f = h5py.File(output_h5, 'r+')
@@ -153,10 +161,11 @@ def compute_expressive_failure(shared, cost_name, cost_fn, dist_name, dist_fn, l
             g["cost_params"][k] = v
         g["cost_params"]["link_names"] = LINK_NAMES
         g["start_config"] = start_config
+        g["idx"] = idx
         g["traj"] = traj
         f.close()
 
-    #idx = np.argmin([cost for cost, cost_p, start_config, traj in costs])
+    #idx = np.argmin([cost for idx, cost, cost_p, start_config, traj in costs])
     #g.create_group("best")
     #g["best"]["idx"] = idx
     #g["best"]["cost"] = costs[idx][0]
@@ -173,7 +182,10 @@ def main():
     #f = h5py.File(h5_fname, 'w')
     #f.close()
 
-    h5_fname = "output_20170927_220543_411510.h5"
+    #h5_fname = "output_20170927_220543_411510.h5"
+    #h5_fname = "output_20170928_131100_000000.h5"
+    #h5_fname = "output_20170928_185100_000000.h5"
+    h5_fname = "output_20170929_105100_000000.h5"
     task_name = sys.argv[1]
 
     task = None

@@ -81,9 +81,9 @@ class SharedVars:
         goal_transform = self.manip.GetEndEffectorTransform()
         axis = self.task["axis"]
         vector = self.task["vector"]
-        if np.abs(vector) == 0.05:  # TODO Remove after debugging
-            self.task["vector"] = vector*2
-            print "new vector:", self.task["vector"]
+        #if np.abs(vector) == 0.05:  # TODO Remove after debugging
+        #    self.task["vector"] = vector*2
+        #    print "new vector:", self.task["vector"]
         goal_transform[:3][:,3][axis] += vector  # update goal_transform accordingly
 
         _,goal_sols = iksolver(self, goal_transform) #get ik solution for goal_transform

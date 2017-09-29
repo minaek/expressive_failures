@@ -7,10 +7,14 @@ CURRDIR = os.path.dirname(__file__)
 PYSCRIPT = os.path.join(CURRDIR, "compare_cost_fcns.py")
 
 TASK_NAMES = ['push', 'lift']
+#TASK_NAMES = ['pull', 'pull_down', 'push_sideways']
 
 def main():
     writelog("Starting")
-    h5_fname = "output_20170927_220543_411510.h5"
+    #h5_fname = "output_20170927_220543_411510.h5"
+    #h5_fname = "output_20170928_131100_000000.h5"
+    #h5_fname = "output_20170928_185100_000000.h5"
+    h5_fname = "output_20170929_105100_000000.h5"
 
     for task_name in TASK_NAMES:
         print "Task:", task_name
