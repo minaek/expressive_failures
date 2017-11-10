@@ -364,8 +364,10 @@ def trim(waypts):
 
 
 def executeBothTimed(waypts, starting_config, reps=3, \
-                     attempt_speed=1.0, reset_speed=0.2, both=True, pause_btwn=0.05):
+                     attempt_speed=1.0, reset_speed=0.2, both=True, pause_btwn=0.05,
+                     premotion=False):
     # attempt_speed, reset_speed - in units of change in configuration space per second
+    # if premotion is True, this is executing heuristic baseline
 
     global robot
     trans = robot.GetTransform()
@@ -386,19 +388,34 @@ def executeBothTimed(waypts, starting_config, reps=3, \
     t_attempt = avg_norm / attempt_speed
     t_reset = avg_norm / reset_speed
 
+    if waypts.shape[1] == 7:
+        both=False
+
     if both==True:
-        for _ in range(reps):
+        if premotion:
+            gripper_before()
+            for w in waypts[::-1][1:]:
+                trans[:3][:,3][:2] = w[-2:]
+                robot.SetTransform(trans)
+                robot.SetDOFValues(w[:7],manip.GetArmIndices())
+                time.sleep(t_reset)
+
+        for i in range(reps):
             # Attempt
             for w in waypts:
-
                 trans[:3][:,3][:2] = w[-2:]
                 robot.SetTransform(trans)
                 robot.SetDOFValues(w[:7],manip.GetArmIndices())
                 time.sleep(t_attempt)
+            if premotion:
+                gripper_after()
 
-            #time.sleep(0.1)
             time.sleep(pause_btwn)
 
+            if premotion and i == reps-1:
+                break
+            if premotion:
+                gripper_before()
             # Reset
             for w in waypts[::-1][1:]:
                 trans[:3][:,3][:2] = w[-2:]
@@ -406,15 +423,27 @@ def executeBothTimed(waypts, starting_config, reps=3, \
                 robot.SetDOFValues(w[:7],manip.GetArmIndices())
                 time.sleep(t_reset)
     else:
-        for _ in range(reps):
+        if premotion:
+            gripper_before()
+            for w in waypts[::-1][1:]:
+                robot.SetDOFValues(w[:7],manip.GetArmIndices())
+                time.sleep(t_reset)
+
+        for i in range(reps):
             # Attempt
             for w in waypts:
 
                 robot.SetDOFValues(w[:7],manip.GetArmIndices())
                 time.sleep(t_attempt)
+            if premotion:
+                gripper_after()
 
-            #time.sleep(0.1)
             time.sleep(pause_btwn)
+
+            if premotion and i == reps-1:
+                break
+            if premotion:
+                gripper_before()
 
             # Reset
             for w in waypts[::-1][1:]:
@@ -584,6 +613,21 @@ def execute_full_traj(start, attempt_speed, reset_speed, base, pre_motion_traj, 
         traj = trim(traj)
         executeBothTimed(traj, start, attempt_speed=attempt_speed, reset_speed=reset_speed,both=base, pause_btwn=pause_btwn)
         #diff,sumd = difference_in_traj(traj)
+
+def execute_heuristic_baseline(start, attempt_speed, reset_speed, base, pre_motion_traj, rewind_t=10, pause_btwn=0.05):
+    # Executes back-and-forth heuristic baseline proposed in Kobayashi and Yamada, "Informing a User of a Robot's Mind by Motion"
+    # Robot moves to failure point (i.e., executes pre_motion_traj), then rewinds
+    # for last rewind_t steps of pre_motion_traj, executes that again, and repeats
+    # this for a total of 3 times
+    print "length of pre_motion_traj:", len(pre_motion_traj)
+    robot.SetDOFValues(params.right_arm_attitude, manip.GetArmIndices()) #set rightarm to initial resting position
+    gripper_before()
+    executeArm(pre_motion_traj, params.right_arm_attitude, attempt_speed=2.0)
+    gripper_after()
+    time.sleep(0.3)
+    orig_traj = np.copy(pre_motion_traj)
+    traj = trim(pre_motion_traj)[-rewind_t:]
+    executeBothTimed(traj, start, attempt_speed=attempt_speed, reset_speed=reset_speed, both=base, pause_btwn=pause_btwn, premotion=True)
 
 def main():
     global BASE
